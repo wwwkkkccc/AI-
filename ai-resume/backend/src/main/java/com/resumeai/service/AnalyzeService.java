@@ -46,6 +46,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
 
+/**
+ * 简历分析核心服务。
+ * <p>
+ * 职责：
+ * 1. 简历/JD 文本提取（支持 PDF、DOCX、图片 OCR、纯文本）
+ * 2. 基于关键词权重的 ATS 评分与覆盖率计算
+ * 3. 调用大模型生成优化建议，失败时使用本地规则兜底
+ * 4. 合并题库面试题并持久化分析记录
+ * </p>
+ */
 @Service
 public class AnalyzeService {
     /*
@@ -114,7 +124,7 @@ public class AnalyzeService {
         this.ocrDatapath = clean(ocrDatapath);
     }
 
-    // 提交前校验: 文件必须有效，且 JD 文本或岗位信息至少有一项可用于分析
+    /** 提交前校验：文件必须有效，且 JD 文本或岗位信息至少有一项可用于分析 */
     public void validateSubmission(MultipartFile file, String jdText, String targetRole) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("file is required");
@@ -129,7 +139,7 @@ public class AnalyzeService {
         }
     }
 
-    // JD 获取优先级: 手工输入文本 > 图片 OCR（用于招聘网站不可复制文本的场景）
+    /** JD 获取优先级：手工输入文本 > 图片 OCR（用于招聘网站不可复制文本的场景） */
     public String resolveJdText(String jdText, MultipartFile jdImage) {
         String cleanJd = clean(jdText);
         if (cleanJd.length() >= 20) {
@@ -162,7 +172,7 @@ public class AnalyzeService {
         }
     }
 
-    // 队列消费入口: 读取落盘文件后，复用统一分析主流程
+    /** 队列消费入口：读取落盘文件后，复用统一分析主流程 */
     public AnalyzeResponse processQueuedJob(AnalysisJob job, UserAccount user) {
         try {
             byte[] data = Files.readAllBytes(Path.of(job.getFilePath()));
@@ -172,7 +182,7 @@ public class AnalyzeService {
         }
     }
 
-    // 统一分析主链路: 解析简历 -> ATS 报告 -> 模型/规则建议 -> 题库问题 -> 保存记录
+    /** 统一分析主链路：解析简历 -> ATS 报告 -> 模型/规则建议 -> 题库问题 -> 保存记录 */
     private AnalyzeResponse analyzeInternal(byte[] fileData, String filename, String jdText, String targetRole, UserAccount user) {
         String cleanRole = clean(targetRole);
         String cleanJd = clean(jdText);
@@ -225,7 +235,7 @@ public class AnalyzeService {
         return response;
     }
 
-    // ATS 报告生成: 关键词权重匹配 + 结构完整度 + 动作词强度 + 量化表达强度
+    /** ATS 报告生成：关键词权重匹配 + 结构完整度 + 动作词强度 + 量化表达强度 */
     private AtsReport buildAtsReport(String resumeText, String jdText, String targetRole) {
         List<String> resumeTokens = tokenize(resumeText);
         Map<String, Integer> resumeFreq = frequency(resumeTokens);
@@ -268,6 +278,7 @@ public class AnalyzeService {
         return report;
     }
 
+    /** 构建 JD 关键词权重表：需求行加权、岗位相关词加权 */
     private Map<String, Double> buildJdWeights(String jdText, String targetRole) {
         Map<String, Double> weights = new HashMap<>();
         List<String> roleTokens = tokenize(targetRole);
@@ -288,6 +299,7 @@ public class AnalyzeService {
         return weights;
     }
 
+    /** 判断行是否包含需求关键词（如"必须"、"required"等） */
     private boolean containsRequirementCue(String line) {
         String lower = line.toLowerCase(Locale.ROOT);
         for (String cue : REQUIREMENT_CUES) {
@@ -296,6 +308,7 @@ public class AnalyzeService {
         return false;
     }
 
+    /** 文本分词：提取中英文关键词 token，过滤停用词 */
     private List<String> tokenize(String text) {
         if (text == null || text.isBlank()) {
             return Collections.emptyList();
@@ -318,6 +331,7 @@ public class AnalyzeService {
         return tokens;
     }
 
+    /** 规范化 token：转小写、去首尾非字母数字字符、别名统一 */
     private String normalizeToken(String token) {
         String base = clean(token).toLowerCase(Locale.ROOT);
         if (base.isEmpty()) return "";
@@ -326,12 +340,14 @@ public class AnalyzeService {
         return ALIAS_TO_CANONICAL.getOrDefault(base, base);
     }
 
+    /** 统计 token 词频 */
     private Map<String, Integer> frequency(List<String> tokens) {
         Map<String, Integer> freq = new HashMap<>();
         for (String tk : tokens) freq.merge(tk, 1, Integer::sum);
         return freq;
     }
 
+    /** 按词频降序取前 N 个关键词 */
     private List<String> topFromFreq(Map<String, Integer> freq, int limit) {
         return freq.entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue(Comparator.reverseOrder()))
@@ -340,6 +356,7 @@ public class AnalyzeService {
                 .toList();
     }
 
+    /** 简历结构完整度评分：检查联系方式、教育、工作经历、项目、技能五个板块 */
     private double sectionCompleteness(String resumeText) {
         String text = resumeText.toLowerCase(Locale.ROOT);
         int score = 0;
@@ -351,12 +368,14 @@ public class AnalyzeService {
         return score / 5.0;
     }
 
+    /** 动作词强度评分：简历中命中的动作词越多分越高 */
     private double actionStrength(List<String> resumeTokens) {
         Set<String> tokenSet = new LinkedHashSet<>(resumeTokens);
         long hits = ACTION_HINTS.stream().map(this::normalizeToken).filter(tokenSet::contains).count();
         return Math.min(1.0, hits / 8.0);
     }
 
+    /** 量化表达强度评分：含数字/百分比的行占比越高分越高 */
     private double quantificationStrength(String resumeText) {
         String[] lines = resumeText.split("\\n+");
         int valid = 0;
@@ -378,7 +397,7 @@ public class AnalyzeService {
         return false;
     }
 
-    // 调用大模型生成优化建议; 返回 null 表示调用失败，交给本地兜底策略
+    /** 调用大模型生成优化建议；返回 null 表示调用失败，交给本地兜底策略 */
     private OptimizedBlock requestLlmOptimized(String resumeText, String jdText, String targetRole, AtsReport ats) {
         AiConfig cfg = configService.getEntity();
         String apiKey = clean(cfg.getApiKey());
@@ -416,6 +435,7 @@ public class AnalyzeService {
         }
     }
 
+    /** 构建发送给大模型的 prompt，包含 ATS 上下文、简历和 JD 文本 */
     private String buildPrompt(String resumeText, String jdText, String targetRole, AtsReport ats) {
         return """
                 Analyze the resume against the job description.
@@ -455,6 +475,7 @@ public class AnalyzeService {
         );
     }
 
+    /** 解析大模型返回的 JSON 内容为 OptimizedBlock 对象 */
     private OptimizedBlock parseOptimizedJson(String content) {
         try {
             String trimmed = content.trim();
@@ -486,7 +507,7 @@ public class AnalyzeService {
         return out;
     }
 
-    // 本地兜底建议: 保证模型不可用时依然能输出可读、可执行的优化结果
+    /** 本地兜底建议：保证模型不可用时依然能输出可读、可执行的优化结果 */
     private OptimizedBlock fallbackOptimized(String resumeText, String jdText, String targetRole, AtsReport ats) {
         List<String> lines = Arrays.stream(resumeText.split("\\n+"))
                 .map(String::trim)
@@ -522,6 +543,7 @@ public class AnalyzeService {
         return block;
     }
 
+    /** 合并题库面试题与模型生成的面试题，去重后返回 */
     private List<String> mergeInterviewQuestions(List<String> kbQuestions, List<String> generatedQuestions, int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 12));
         List<String> out = new ArrayList<>();
@@ -559,7 +581,7 @@ public class AnalyzeService {
         out.add(text);
     }
 
-    // 将结构化结果转为 Markdown，便于历史记录展示与后续导出
+    /** 将结构化分析结果转为 Markdown 格式，便于历史记录展示与导出 */
     private String toMarkdown(AnalyzeResponse response) {
         StringBuilder sb = new StringBuilder();
         sb.append("# Resume Optimization Report\n\n");
@@ -581,7 +603,7 @@ public class AnalyzeService {
         return sb.toString();
     }
 
-    // 按文件后缀选择解析器: PDF / DOCX / 图片 OCR / 纯文本
+    /** 按文件后缀选择解析器：PDF / DOCX / 图片 OCR / 纯文本 */
     private String extractResumeText(byte[] data, String filename) {
         String lowerName = clean(filename).toLowerCase(Locale.ROOT);
         try {
@@ -600,6 +622,7 @@ public class AnalyzeService {
         }
     }
 
+    /** 从 PDF 文件中提取文本 */
     private String extractPdf(byte[] data) throws IOException {
         try (PDDocument document = Loader.loadPDF(data)) {
             PDFTextStripper stripper = new PDFTextStripper();
@@ -607,6 +630,7 @@ public class AnalyzeService {
         }
     }
 
+    /** 从 DOCX 文件中提取段落文本 */
     private String extractDocx(byte[] data) throws IOException {
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(data))) {
             List<String> lines = new ArrayList<>();
@@ -618,6 +642,7 @@ public class AnalyzeService {
         }
     }
 
+    /** 通过 OCR 从图片中提取文本 */
     private String extractImageText(byte[] data) throws IOException, TesseractException {
         BufferedImage image = ImageIO.read(new ByteArrayInputStream(data));
         if (image == null) {
@@ -631,6 +656,7 @@ public class AnalyzeService {
         return text;
     }
 
+    /** 构建 Tesseract OCR 实例 */
     private ITesseract buildTesseract() {
         Tesseract tesseract = new Tesseract();
         if (!ocrDatapath.isBlank()) {
@@ -641,6 +667,7 @@ public class AnalyzeService {
         return tesseract;
     }
 
+    /** 判断文件名是否为图片格式 */
     private boolean isImageFilename(String filename) {
         return filename.endsWith(".png")
                 || filename.endsWith(".jpg")
@@ -651,11 +678,13 @@ public class AnalyzeService {
                 || filename.endsWith(".tiff");
     }
 
+    /** 规范化文本：统一换行符、合并连续空行 */
     private String normalizeText(String text) {
         String normalized = clean(text).replace("\r", "\n");
         return normalized.replaceAll("\\n{3,}", "\n\n");
     }
 
+    /** 当 JD 文本不足时，根据岗位名称生成通用 JD 模板 */
     private String buildRoleTemplate(String role) {
         return """
                 Role: %s
@@ -670,6 +699,7 @@ public class AnalyzeService {
                 """.formatted(role);
     }
 
+    /** 规范化 AI 接口的 baseUrl：去尾斜杠，纯域名时自动追加 /v1 */
     private String normalizeBaseUrl(String baseUrl) {
         String url = clean(baseUrl);
         if (url.isEmpty()) {
@@ -684,20 +714,24 @@ public class AnalyzeService {
         return url;
     }
 
+    /** 截断字符串到指定最大长度 */
     private String cut(String text, int max) {
         String value = clean(text);
         if (value.length() <= max) return value;
         return value.substring(0, max);
     }
 
+    /** 清理字符串：null 转空串并去除首尾空白 */
     private String clean(String value) {
         return value == null ? "" : value.trim();
     }
 
+    /** 四舍五入保留两位小数 */
     private double round2(double val) {
         return Math.round(val * 100.0) / 100.0;
     }
 
+    /** 构建技术关键词别名映射表，将同义词统一为规范形式 */
     private static Map<String, String> buildAliasMap() {
         List<List<String>> groups = List.of(
                 List.of("java", "jdk", "jvm"),
@@ -722,6 +756,7 @@ public class AnalyzeService {
         return map;
     }
 
+    /** ATS 分析报告内部数据结构 */
     private static class AtsReport {
         private double score;
         private double coverage;

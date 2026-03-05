@@ -98,20 +98,6 @@ public class AuthService {
      * 管理员用户名和密码来自配置文件，若未配置则跳过。
      * </p>
      */
-    /**
-     * 确保管理员账号存在。
-     * <p>
-     * 应用启动时调用，若数据库中不存在预设管理员账号则自动创建。
-     * 管理员用户名和密码来自配置文件，若未配置则跳过。
-     * </p>
-     */
-    /**
-     * 确保管理员账号存在。
-     * <p>
-     * 应用启动时调用，若数据库中不存在预设管理员账号则自动创建。
-     * 管理员用户名和密码来自配置文件，若未配置则跳过。
-     * </p>
-     */
     @Transactional
     public void ensureAdminAccount() {
         if (adminUsername.isEmpty() || adminPassword.isEmpty()) {
@@ -204,15 +190,6 @@ public class AuthService {
      * @param request 包含用户名和密码的登录请求
      * @return 包含 Token 和用户信息的认证响应
      */
-    /**
-     * 用户登录。
-     * <p>
-     * 校验用户名密码，验证账号未被拉黑后创建新会话。
-     * </p>
-     *
-     * @param request 包含用户名和密码的登录请求
-     * @return 包含 Token 和用户信息的认证响应
-     */
     @Transactional
     public AuthResponse login(AuthRequest request) {
         String username = normalizeUsername(request.getUsername());
@@ -235,26 +212,6 @@ public class AuthService {
         return createSession(user);
     }
 
-    /**
-     * 用户登出，删除当前会话。
-     *
-     * @param request HTTP 请求，从中提取 Token
-     */
-    /**
-     * 用户登出，删除当前会话。
-     *
-     * @param request HTTP 请求，从中提取 Token
-     */
-    /**
-     * 用户登出，删除当前会话。
-     *
-     * @param request HTTP 请求，从中提取 Token
-     */
-    /**
-     * 用户登出，删除当前会话。
-     *
-     * @param request HTTP 请求，从中提取 Token
-     */
     /**
      * 用户登出，删除当前会话。
      *
@@ -300,18 +257,6 @@ public class AuthService {
      * @param request HTTP 请求
      * @return 管理员用户账号
      */
-    /**
-     * 要求当前用户为管理员，否则抛出权限异常。
-     *
-     * @param request HTTP 请求
-     * @return 管理员用户账号
-     */
-    /**
-     * 要求当前用户为管理员，否则抛出权限异常。
-     *
-     * @param request HTTP 请求
-     * @return 管理员用户账号
-     */
     @Transactional(readOnly = true)
     public UserAccount requireAdmin(HttpServletRequest request) {
         UserAccount user = requireUser(request);
@@ -321,30 +266,6 @@ public class AuthService {
         return user;
     }
 
-    /**
-     * 将用户账号实体转换为前端用户信息响应 DTO。
-     *
-     * @param user 用户账号实体
-     * @return 用户信息响应对象
-     */
-    /**
-     * 将用户账号实体转换为前端用户信息响应 DTO。
-     *
-     * @param user 用户账号实体
-     * @return 用户信息响应对象
-     */
-    /**
-     * 将用户账号实体转换为前端用户信息响应 DTO。
-     *
-     * @param user 用户账号实体
-     * @return 用户信息响应对象
-     */
-    /**
-     * 将用户账号实体转换为前端用户信息响应 DTO。
-     *
-     * @param user 用户账号实体
-     * @return 用户信息响应对象
-     */
     /**
      * 将用户账号实体转换为前端用户信息响应 DTO。
      *
