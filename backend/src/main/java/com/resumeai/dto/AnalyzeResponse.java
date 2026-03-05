@@ -4,25 +4,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 简历分析结果响应 DTO，用于返回简历与职位描述的匹配分析结果
+ * 简历分析结果响应 DTO。
  */
 public class AnalyzeResponse {
-    /** 分析记录 ID */
     private Long analysisId;
-    /** 简历匹配评分 */
     private Double score;
-    /** 关键词覆盖率 */
     private Double coverage;
-    /** 简历中已匹配的关键词列表 */
     private List<String> matchedKeywords = new ArrayList<>();
-    /** 简历中缺失的关键词列表 */
     private List<String> missingKeywords = new ArrayList<>();
-    /** 是否使用了 LLM 模型进行分析 */
     private Boolean modelUsed;
-    /** 结构化的优化建议 */
     private OptimizedBlock optimized;
-    /** Markdown 格式的优化建议 */
     private String optimizedMarkdown;
+    private String optimizedResumeMarkdown;
 
     public Long getAnalysisId() {
         return analysisId;
@@ -86,5 +79,13 @@ public class AnalyzeResponse {
 
     public void setOptimizedMarkdown(String optimizedMarkdown) {
         this.optimizedMarkdown = optimizedMarkdown;
+    }
+
+    public String getOptimizedResumeMarkdown() {
+        return optimizedResumeMarkdown;
+    }
+
+    public void setOptimizedResumeMarkdown(String optimizedResumeMarkdown) {
+        this.optimizedResumeMarkdown = optimizedResumeMarkdown;
     }
 }

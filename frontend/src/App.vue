@@ -97,6 +97,51 @@
           <!-- ===== 简历分析标签页 ===== -->
           <section v-if="tab === 'analyze'" class="card">
         <h2>简历分析</h2>
+
+        <div class="sub-card">
+          <h3>AI 简历一键生成/重写</h3>
+          <form @submit.prevent="generateResumeFromJd">
+            <label>目标岗位</label>
+            <input v-model.trim="resumeGenForm.targetRole" type="text" placeholder="例如：高级后端工程师" />
+
+            <label>岗位描述（JD）</label>
+            <textarea v-model.trim="resumeGenForm.jdText" rows="6" placeholder="粘贴岗位 JD，用于生成定制化简历" />
+
+            <label>个人背景（可选）</label>
+            <textarea v-model.trim="resumeGenForm.userBackground" rows="4" placeholder="可补充教育、项目、擅长方向等背景信息" />
+
+            <div class="inline">
+              <button :disabled="resumeGenLoading">{{ resumeGenLoading ? "生成中..." : "从 JD 一键生成" }}</button>
+              <button
+                type="button"
+                class="mini-btn neutral"
+                :disabled="resumeGenLoading || !result?.analysisId"
+                @click="rewriteResumeFromCurrentAnalysis"
+              >
+                基于当前分析重写
+              </button>
+              <button
+                type="button"
+                class="mini-btn neutral"
+                :disabled="!generatedResume.markdown"
+                @click="copyGeneratedResume"
+              >
+                复制 Markdown
+              </button>
+              <button
+                type="button"
+                class="mini-btn neutral"
+                :disabled="!generatedResume.markdown"
+                @click="downloadGeneratedResume"
+              >
+                导出 .md
+              </button>
+            </div>
+          </form>
+          <p class="message">{{ resumeGenMessage }}</p>
+          <pre v-if="generatedResume.markdown" class="md-preview">{{ generatedResume.markdown }}</pre>
+        </div>
+
         <!-- 简历分析表单：上传文件、填写岗位和JD -->
         <form @submit.prevent="submitAnalyze">
           <label>目标岗位</label>
@@ -151,10 +196,152 @@
           <p>{{ (result.missingKeywords || []).join(', ') || '-' }}</p>
           <h3>优化摘要</h3>
           <p>{{ result.optimized?.summary || '-' }}</p>
+          <h3>重写经历（STAR）</h3>
+          <ul>
+            <li v-for="(line, idx) in result.optimized?.rewrittenExperience || []" :key="`star-${idx}`">{{ line }}</li>
+          </ul>
           <h3>可能面试问题</h3>
           <ul>
             <li v-for="(q, idx) in result.optimized?.interviewQuestions || []" :key="idx">{{ q }}</li>
           </ul>
+
+          <div class="sub-card">
+            <h3>完整简历导出（当前分析自动生成）</h3>
+            <div class="inline">
+              <button
+                type="button"
+                class="mini-btn neutral"
+                :disabled="!result.optimizedResumeMarkdown"
+                @click="copyText(result.optimizedResumeMarkdown)"
+              >
+                复制
+              </button>
+              <button
+                type="button"
+                class="mini-btn neutral"
+                :disabled="!result.optimizedResumeMarkdown"
+                @click="downloadText('optimized-resume.md', result.optimizedResumeMarkdown)"
+              >
+                导出 .md
+              </button>
+            </div>
+            <pre v-if="result.optimizedResumeMarkdown" class="md-preview">{{ result.optimizedResumeMarkdown }}</pre>
+          </div>
+
+          <div class="sub-card">
+            <h3>多轮对话式简历优化助手</h3>
+            <div class="inline">
+              <button
+                type="button"
+                :disabled="chatLoading || !result.analysisId"
+                @click="startResumeChat"
+              >
+                {{ chatState.sessionId ? "重新开启会话" : "开启会话" }}
+              </button>
+              <button
+                type="button"
+                class="mini-btn neutral"
+                :disabled="chatLoading || !chatState.sessionId"
+                @click="quickAsk('这条经历具体怎么改成 STAR？')"
+              >
+                快捷追问
+              </button>
+            </div>
+            <p class="message">{{ chatMessage }}</p>
+            <div v-if="chatState.sessionId" class="chat-panel">
+              <div class="chat-list">
+                <div
+                  v-for="msg in chatState.messages"
+                  :key="`chat-${msg.id}`"
+                  class="chat-item"
+                  :class="msg.role === 'USER' ? 'chat-user' : 'chat-ai'"
+                >
+                  <strong>{{ msg.role === "USER" ? "我" : "AI" }}</strong>
+                  <p>{{ msg.content }}</p>
+                </div>
+              </div>
+              <form class="chat-form" @submit.prevent="sendChatMessage">
+                <input
+                  v-model.trim="chatState.input"
+                  type="text"
+                  placeholder="例如：这段项目如何写成带量化结果的 STAR？"
+                />
+                <button :disabled="chatLoading || !chatState.input">
+                  {{ chatLoading ? "发送中..." : "发送" }}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div class="sub-card">
+            <h3>JD 智能解析与岗位匹配度雷达图</h3>
+            <button
+              type="button"
+              :disabled="radarLoading || !result.analysisId"
+              @click="runJdRadarFromCurrent"
+            >
+              {{ radarLoading ? "解析中..." : "生成雷达图" }}
+            </button>
+            <p class="message">{{ radarMessage }}</p>
+            <div v-if="jdRadar" class="radar-wrap">
+              <svg viewBox="0 0 320 320" class="radar-svg">
+                <polygon :points="radarMaxPolygon(jdRadar.dimensions || [])" class="radar-max" />
+                <polygon :points="radarValuePolygon(jdRadar.dimensions || [])" class="radar-value" />
+                <line
+                  v-for="(d, idx) in jdRadar.dimensions || []"
+                  :key="`axis-${idx}`"
+                  x1="160"
+                  y1="160"
+                  :x2="radarAxisX(idx, (jdRadar.dimensions || []).length)"
+                  :y2="radarAxisY(idx, (jdRadar.dimensions || []).length)"
+                  class="radar-axis"
+                />
+                <text
+                  v-for="(d, idx) in jdRadar.dimensions || []"
+                  :key="`label-${idx}`"
+                  :x="radarLabelX(idx, (jdRadar.dimensions || []).length)"
+                  :y="radarLabelY(idx, (jdRadar.dimensions || []).length)"
+                  class="radar-label"
+                >
+                  {{ d.name }}
+                </text>
+              </svg>
+              <div class="radar-detail">
+                <p class="message">综合匹配度：{{ formatScore(jdRadar.overallScore) }}</p>
+                <ul>
+                  <li v-for="(d, idx) in jdRadar.dimensions || []" :key="`dim-${idx}`">
+                    {{ d.name }}：{{ formatScore(d.score) }} / {{ formatScore(d.maxScore) }}，{{ d.detail }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-card">
+            <h3>简历内容真实性/夸大检测</h3>
+            <button
+              type="button"
+              :disabled="auditLoading || !result.analysisId"
+              @click="runAuditFromCurrent"
+            >
+              {{ auditLoading ? "检测中..." : "开始检测" }}
+            </button>
+            <p class="message">{{ auditMessage }}</p>
+            <div v-if="resumeAudit">
+              <div class="inline">
+                <span class="state-pill" :class="auditLevelClass(resumeAudit.riskLevel)">
+                  风险等级：{{ resumeAudit.riskLevel }}
+                </span>
+                <span class="state-pill state-no">风险分：{{ formatScore(resumeAudit.riskScore) }}</span>
+              </div>
+              <p>{{ resumeAudit.summary }}</p>
+              <ul>
+                <li v-for="(item, idx) in resumeAudit.auditItems || []" :key="`audit-${idx}`">
+                  [{{ item.severity }}] {{ item.category }} - {{ item.description }}；建议：{{ item.suggestion }}
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -554,6 +741,40 @@ const analyzeForm = reactive({     // 分析表单数据
   jdImage: null                    // JD 截图文件
 });
 
+// ===== AI 简历生成/重写 =====
+const resumeGenLoading = ref(false);
+const resumeGenMessage = ref("");
+const resumeGenForm = reactive({
+  targetRole: "",
+  jdText: "",
+  userBackground: ""
+});
+const generatedResume = reactive({
+  mode: "",
+  markdown: "",
+  modelUsed: false,
+  analysisId: null
+});
+
+// ===== 多轮优化对话 =====
+const chatLoading = ref(false);
+const chatMessage = ref("");
+const chatState = reactive({
+  sessionId: null,
+  messages: [],
+  input: ""
+});
+
+// ===== JD 雷达分析 =====
+const radarLoading = ref(false);
+const radarMessage = ref("");
+const jdRadar = ref(null);
+
+// ===== 简历真实性检测 =====
+const auditLoading = ref(false);
+const auditMessage = ref("");
+const resumeAudit = ref(null);
+
 const queueJob = reactive({        // 当前排队任务状态
   jobId: "",                       // 任务 ID
   status: "",                      // 任务状态（PENDING/PROCESSING/DONE/FAILED）
@@ -683,6 +904,14 @@ function toZhMessage(message) {
     "failed to read resume file": "简历文件读取失败",
     "job not found": "任务不存在",
     "cannot access this job": "无权访问该任务",
+    "target_role is required": "请填写目标岗位",
+    "analysis_id is required": "缺少分析记录ID",
+    "analysis record not found": "分析记录不存在",
+    "cannot access this analysis record": "无权访问该分析记录",
+    "message is required": "请输入对话内容",
+    "chat session not found": "对话会话不存在",
+    "cannot access this chat session": "无权访问该对话会话",
+    "jd_text is required": "请填写JD文本",
     "question doc file is required": "请先选择面试文档",
     "question doc file is too large": "面试文档过大，请上传12MB以内文件",
     "question doc format not supported": "文档格式不支持，请上传 pdf/docx/txt/md/图片",
@@ -785,6 +1014,81 @@ function tabTitle(tabKey) {
     adminKb: "面试题库"
   };
   return map[tabKey] || "工作台";
+}
+
+function auditLevelClass(level) {
+  const v = String(level || "").toUpperCase();
+  if (v === "HIGH") return "audit-high";
+  if (v === "MEDIUM") return "audit-mid";
+  return "audit-low";
+}
+
+function radarPolygon(scores, count, radius = 110, cx = 160, cy = 160) {
+  if (!count) return "";
+  const points = [];
+  for (let i = 0; i < count; i += 1) {
+    const angle = (Math.PI * 2 * i) / count - Math.PI / 2;
+    const score = Math.max(0, Math.min(100, asNumber(scores[i])));
+    const r = (radius * score) / 100;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    points.push(`${x},${y}`);
+  }
+  return points.join(" ");
+}
+
+function radarMaxPolygon(dimensions) {
+  const count = (dimensions || []).length;
+  return radarPolygon(new Array(count).fill(100), count);
+}
+
+function radarValuePolygon(dimensions) {
+  const rows = dimensions || [];
+  return radarPolygon(rows.map((d) => d?.score ?? 0), rows.length);
+}
+
+function radarAxisX(idx, count, radius = 110, cx = 160) {
+  const angle = (Math.PI * 2 * idx) / Math.max(1, count) - Math.PI / 2;
+  return cx + Math.cos(angle) * radius;
+}
+
+function radarAxisY(idx, count, radius = 110, cy = 160) {
+  const angle = (Math.PI * 2 * idx) / Math.max(1, count) - Math.PI / 2;
+  return cy + Math.sin(angle) * radius;
+}
+
+function radarLabelX(idx, count, radius = 130, cx = 160) {
+  const angle = (Math.PI * 2 * idx) / Math.max(1, count) - Math.PI / 2;
+  return cx + Math.cos(angle) * radius;
+}
+
+function radarLabelY(idx, count, radius = 130, cy = 160) {
+  const angle = (Math.PI * 2 * idx) / Math.max(1, count) - Math.PI / 2;
+  return cy + Math.sin(angle) * radius;
+}
+
+async function copyText(text) {
+  const value = String(text || "").trim();
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    // ignore
+  }
+}
+
+function downloadText(filename, text) {
+  const value = String(text || "");
+  if (!value) return;
+  const blob = new Blob([value], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // 通用 API 请求封装：自动注入鉴权头、解析 JSON、统一错误处理
@@ -928,6 +1232,26 @@ async function logout() {
   me.vip = false;
   me.blacklisted = false;
   result.value = null;
+  resumeGenMessage.value = "";
+  resumeGenLoading.value = false;
+  resumeGenForm.targetRole = "";
+  resumeGenForm.jdText = "";
+  resumeGenForm.userBackground = "";
+  generatedResume.mode = "";
+  generatedResume.markdown = "";
+  generatedResume.modelUsed = false;
+  generatedResume.analysisId = null;
+  chatLoading.value = false;
+  chatMessage.value = "";
+  chatState.sessionId = null;
+  chatState.messages = [];
+  chatState.input = "";
+  radarLoading.value = false;
+  radarMessage.value = "";
+  jdRadar.value = null;
+  auditLoading.value = false;
+  auditMessage.value = "";
+  resumeAudit.value = null;
   mineItems.value = [];
   adminUsers.value = [];
   adminItems.value = [];
@@ -1038,6 +1362,14 @@ async function submitAnalyze() {
   analyzeLoading.value = true;
   analyzeMessage.value = "";
   result.value = null;
+  chatState.sessionId = null;
+  chatState.messages = [];
+  chatState.input = "";
+  chatMessage.value = "";
+  jdRadar.value = null;
+  radarMessage.value = "";
+  resumeAudit.value = null;
+  auditMessage.value = "";
   stopPolling();
   resetQueueJob();
 
@@ -1078,6 +1410,175 @@ async function submitAnalyze() {
     analyzeMessage.value = toZhMessage(err.message || "提交分析失败");
   } finally {
     analyzeLoading.value = false;
+  }
+}
+
+async function generateResumeFromJd() {
+  if (!resumeGenForm.targetRole || !resumeGenForm.jdText) {
+    resumeGenMessage.value = "请填写目标岗位和 JD";
+    return;
+  }
+  resumeGenLoading.value = true;
+  resumeGenMessage.value = "";
+  try {
+    const data = await apiRequest("/resume/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetRole: resumeGenForm.targetRole,
+        jdText: resumeGenForm.jdText,
+        userBackground: resumeGenForm.userBackground
+      })
+    });
+    generatedResume.mode = data.mode || "";
+    generatedResume.markdown = data.markdown || "";
+    generatedResume.modelUsed = !!data.modelUsed;
+    generatedResume.analysisId = data.analysisId ?? null;
+    resumeGenMessage.value = generatedResume.modelUsed
+      ? "生成成功（AI模型）"
+      : "生成完成（本地模板兜底）";
+  } catch (err) {
+    resumeGenMessage.value = toZhMessage(err.message || "简历生成失败");
+  } finally {
+    resumeGenLoading.value = false;
+  }
+}
+
+async function rewriteResumeFromCurrentAnalysis() {
+  const analysisId = result.value?.analysisId;
+  if (!analysisId) {
+    resumeGenMessage.value = "当前没有可重写的分析记录";
+    return;
+  }
+  resumeGenLoading.value = true;
+  resumeGenMessage.value = "";
+  try {
+    const data = await apiRequest("/resume/rewrite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysisId })
+    });
+    generatedResume.mode = data.mode || "";
+    generatedResume.markdown = data.markdown || "";
+    generatedResume.modelUsed = !!data.modelUsed;
+    generatedResume.analysisId = data.analysisId ?? null;
+    resumeGenMessage.value = generatedResume.modelUsed
+      ? "重写成功（AI模型）"
+      : "重写完成（本地模板兜底）";
+  } catch (err) {
+    resumeGenMessage.value = toZhMessage(err.message || "重写失败");
+  } finally {
+    resumeGenLoading.value = false;
+  }
+}
+
+async function copyGeneratedResume() {
+  await copyText(generatedResume.markdown);
+  resumeGenMessage.value = "已复制到剪贴板";
+}
+
+function downloadGeneratedResume() {
+  downloadText("generated-resume.md", generatedResume.markdown);
+}
+
+async function startResumeChat() {
+  const analysisId = result.value?.analysisId;
+  if (!analysisId) {
+    chatMessage.value = "请先完成一次分析";
+    return;
+  }
+  chatLoading.value = true;
+  chatMessage.value = "";
+  try {
+    const data = await apiRequest("/chat/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysisId })
+    });
+    chatState.sessionId = data.sessionId;
+    chatState.messages = data.messages || [];
+    chatState.input = "";
+    chatMessage.value = `会话已创建（ID: ${data.sessionId}）`;
+  } catch (err) {
+    chatMessage.value = toZhMessage(err.message || "开启会话失败");
+  } finally {
+    chatLoading.value = false;
+  }
+}
+
+async function sendChatMessage() {
+  if (!chatState.sessionId) {
+    chatMessage.value = "请先开启会话";
+    return;
+  }
+  if (!chatState.input) return;
+
+  const ask = chatState.input;
+  chatLoading.value = true;
+  chatMessage.value = "";
+  try {
+    const data = await apiRequest(`/chat/${chatState.sessionId}/message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: ask })
+    });
+    chatState.messages = data.messages || [];
+    chatState.input = "";
+  } catch (err) {
+    chatMessage.value = toZhMessage(err.message || "发送失败");
+  } finally {
+    chatLoading.value = false;
+  }
+}
+
+async function quickAsk(text) {
+  chatState.input = text;
+  await sendChatMessage();
+}
+
+async function runJdRadarFromCurrent() {
+  const analysisId = result.value?.analysisId;
+  if (!analysisId) {
+    radarMessage.value = "请先完成一次分析";
+    return;
+  }
+  radarLoading.value = true;
+  radarMessage.value = "";
+  try {
+    const data = await apiRequest("/jd/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysisId })
+    });
+    jdRadar.value = data;
+    radarMessage.value = "雷达图数据生成成功";
+  } catch (err) {
+    radarMessage.value = toZhMessage(err.message || "JD 解析失败");
+  } finally {
+    radarLoading.value = false;
+  }
+}
+
+async function runAuditFromCurrent() {
+  const analysisId = result.value?.analysisId;
+  if (!analysisId) {
+    auditMessage.value = "请先完成一次分析";
+    return;
+  }
+  auditLoading.value = true;
+  auditMessage.value = "";
+  try {
+    const data = await apiRequest("/resume/audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysisId, targetRole: analyzeForm.targetRole || "" })
+    });
+    resumeAudit.value = data;
+    auditMessage.value = "真实性检测完成";
+  } catch (err) {
+    auditMessage.value = toZhMessage(err.message || "真实性检测失败");
+  } finally {
+    auditLoading.value = false;
   }
 }
 

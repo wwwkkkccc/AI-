@@ -202,6 +202,7 @@ public class AnalyzeService {
         response.setModelUsed(modelUsed);
         response.setOptimized(optimized);
         response.setOptimizedMarkdown(toMarkdown(response));
+        response.setOptimizedResumeMarkdown(buildOptimizedResumeMarkdown(resumeText, cleanRole, optimized));
 
         AnalysisRecord record = new AnalysisRecord();
         record.setCreatedAt(Instant.now());
@@ -578,6 +579,58 @@ public class AnalyzeService {
         for (String line : o.getSkillsRecommendations()) sb.append("- ").append(line).append("\n");
         sb.append("\n## Interview Questions\n");
         for (String line : o.getInterviewQuestions()) sb.append("- ").append(line).append("\n");
+        return sb.toString();
+    }
+
+    // Build a directly exportable resume markdown from analyzed content and rewritten experience bullets.
+    private String buildOptimizedResumeMarkdown(String resumeText, String targetRole, OptimizedBlock optimized) {
+        String role = clean(targetRole).isEmpty() ? "Engineer" : clean(targetRole);
+        List<String> experience = optimized == null || optimized.getRewrittenExperience() == null
+                ? List.of()
+                : optimized.getRewrittenExperience();
+        List<String> skills = optimized == null || optimized.getSkillsRecommendations() == null
+                ? List.of()
+                : optimized.getSkillsRecommendations();
+        String summary = optimized == null ? "" : clean(optimized.getSummary());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("# [候选人姓名]\n");
+        sb.append("- 目标岗位：").append(role).append("\n");
+        sb.append("- 联系方式：[待补充]\n\n");
+
+        sb.append("## 职业摘要\n");
+        if (summary.isEmpty()) {
+            sb.append("围绕目标岗位输出可量化成果，突出技术深度与业务价值。\n\n");
+        } else {
+            sb.append(summary).append("\n\n");
+        }
+
+        sb.append("## 核心技能\n");
+        if (skills.isEmpty()) {
+            sb.append("- 根据 JD 要求补齐技能分组（语言/框架/数据库/中间件/工程化）\n");
+        } else {
+            for (String skill : skills) {
+                sb.append("- ").append(clean(skill)).append("\n");
+            }
+        }
+
+        sb.append("\n## 工作经历（STAR）\n");
+        if (experience.isEmpty()) {
+            sb.append("- S：在 [业务场景] 下遇到 [问题]。\n");
+            sb.append("- T：负责 [目标] 与 [交付范围]。\n");
+            sb.append("- A：采用 [技术方案] 完成落地。\n");
+            sb.append("- R：实现 [量化结果]。\n");
+        } else {
+            int idx = 1;
+            for (String line : experience) {
+                sb.append("### 经历 ").append(idx++).append("\n");
+                sb.append("- ").append(clean(line)).append("\n");
+            }
+        }
+
+        sb.append("\n## 原始简历摘录（参考）\n");
+        sb.append("```\n").append(cut(resumeText, 1800)).append("\n```\n");
+        sb.append("\n## 教育背景\n- [待补充]\n");
         return sb.toString();
     }
 
