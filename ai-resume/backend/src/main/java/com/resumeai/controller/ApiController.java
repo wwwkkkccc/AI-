@@ -17,9 +17,13 @@ import com.resumeai.dto.InterviewKbDocQuestionsResponse;
 import com.resumeai.dto.InterviewKbDocsResponse;
 import com.resumeai.dto.InterviewKbLlmImportRequest;
 import com.resumeai.dto.InterviewKbLlmImportResponse;
+import com.resumeai.dto.InterviewSessionResponse;
+import com.resumeai.dto.InterviewAnswerRequest;
+import com.resumeai.dto.StartInterviewRequest;
 import com.resumeai.dto.UserInfoResponse;
 import com.resumeai.model.UserAccount;
 import com.resumeai.service.AnalysisQueueService;
+import com.resumeai.service.AnalyzeService;
 import com.resumeai.service.AuthService;
 import com.resumeai.service.ConfigService;
 import com.resumeai.service.ForbiddenException;
@@ -28,12 +32,14 @@ import com.resumeai.service.InterviewKbCrawlerService;
 import com.resumeai.service.InterviewKbDocViewService;
 import com.resumeai.service.InterviewKbLlmImportService;
 import com.resumeai.service.InterviewQuestionKbService;
+import com.resumeai.service.MockInterviewService;
 import com.resumeai.service.UnauthorizedException;
 import com.resumeai.service.UserManageService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -57,6 +63,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * 统一 API 控制器，所有 REST 接口的入口。
@@ -75,6 +82,7 @@ public class ApiController {
 
     private static final Logger log = LoggerFactory.getLogger(ApiController.class);
     private final AnalysisQueueService analysisQueueService;
+    private final AnalyzeService analyzeService;
     private final ConfigService configService;
     private final AuthService authService;
     private final HistoryService historyService;
@@ -83,10 +91,12 @@ public class ApiController {
     private final InterviewKbCrawlerService interviewKbCrawlerService;
     private final InterviewKbDocViewService interviewKbDocViewService;
     private final InterviewKbLlmImportService interviewKbLlmImportService;
+    private final MockInterviewService mockInterviewService;
 
     /** 构造函数，通过 Spring 依赖注入获取所有业务服务。 */
     public ApiController(
             AnalysisQueueService analysisQueueService,
+            AnalyzeService analyzeService,
             ConfigService configService,
             AuthService authService,
             HistoryService historyService,
@@ -94,8 +104,10 @@ public class ApiController {
             InterviewQuestionKbService interviewQuestionKbService,
             InterviewKbCrawlerService interviewKbCrawlerService,
             InterviewKbDocViewService interviewKbDocViewService,
-            InterviewKbLlmImportService interviewKbLlmImportService) {
+            InterviewKbLlmImportService interviewKbLlmImportService,
+            MockInterviewService mockInterviewService) {
         this.analysisQueueService = analysisQueueService;
+        this.analyzeService = analyzeService;
         this.configService = configService;
         this.authService = authService;
         this.historyService = historyService;
@@ -104,6 +116,7 @@ public class ApiController {
         this.interviewKbCrawlerService = interviewKbCrawlerService;
         this.interviewKbDocViewService = interviewKbDocViewService;
         this.interviewKbLlmImportService = interviewKbLlmImportService;
+        this.mockInterviewService = mockInterviewService;
     }
 
     /** 健康检查接口，返回服务名称和当前时间戳。 */
@@ -326,6 +339,114 @@ public class ApiController {
             HttpServletRequest request) {
         UserAccount admin = authService.requireAdmin(request);
         return interviewKbLlmImportService.importByLlm(req, admin);
+    }
+
+    // ==================== AI 模拟面试 ====================
+
+    /** 开始一场模拟面试。 */
+    @PostMapping(value = "/interview/start", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public InterviewSessionResponse startInterview(
+            @RequestBody @Valid StartInterviewRequest req,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return mockInterviewService.startInterview(
+                req.getTargetRole(),
+                req.getResumeText(),
+                req.getJdText(),
+                req.getMissingKeywords(),
+                user);
+    }
+
+    /** 用户回答面试问题，AI 评分并出下一题。 */
+    @PostMapping(value = "/interview/start", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public InterviewSessionResponse startInterviewMultipart(
+            @RequestParam(name = "target_role") String targetRole,
+            @RequestParam(name = "resume_text", required = false) String resumeText,
+            @RequestParam(name = "jd_text", required = false) String jdText,
+            @RequestParam(name = "missing_keywords", required = false) java.util.List<String> missingKeywords,
+            @RequestPart(name = "jd_image", required = false) MultipartFile jdImage,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        String resolvedJd = analyzeService.resolveJdText(jdText, jdImage);
+        return mockInterviewService.startInterview(
+                targetRole,
+                resumeText,
+                resolvedJd,
+                missingKeywords,
+                user);
+    }
+
+    @PostMapping("/interview/{sessionId}/answer")
+    public InterviewSessionResponse answerInterview(
+            @PathVariable("sessionId") Long sessionId,
+            @RequestBody @Valid InterviewAnswerRequest req,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return mockInterviewService.answer(sessionId, req.getAnswer(), user);
+    }
+
+    /** 鐢ㄦ埛鍥炵瓟闈㈣瘯闂锛孉I 浠?SSE 娴佸紡杩斿洖璇勫垎涓庝笅涓€棰樸€?*/
+    @PostMapping(value = "/interview/{sessionId}/answer/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter answerInterviewStream(
+            @PathVariable("sessionId") Long sessionId,
+            @RequestBody @Valid InterviewAnswerRequest req,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        SseEmitter emitter = new SseEmitter(120000L);
+        CompletableFuture.runAsync(() -> {
+            try {
+                emitter.send(SseEmitter.event().name("status").data(Map.of("stage", "received")));
+                emitter.send(SseEmitter.event().name("status").data(Map.of("stage", "evaluating")));
+
+                InterviewSessionResponse response = mockInterviewService.answer(sessionId, req.getAnswer(), user);
+                String content = response.getLatestAiMessage() == null
+                        ? ""
+                        : String.valueOf(response.getLatestAiMessage().getContent());
+                if (!content.isBlank()) {
+                    int chunkSize = 28;
+                    for (int i = 0; i < content.length(); i += chunkSize) {
+                        String chunk = content.substring(i, Math.min(content.length(), i + chunkSize));
+                        emitter.send(SseEmitter.event().name("delta").data(Map.of("content", chunk)));
+                    }
+                }
+                emitter.send(SseEmitter.event().name("done").data(response));
+                emitter.complete();
+            } catch (Exception ex) {
+                try {
+                    emitter.send(SseEmitter.event().name("error")
+                            .data(Map.of("detail", ex.getMessage() == null ? "interview stream failed" : ex.getMessage())));
+                } catch (Exception ignore) {
+                    // ignore secondary failure
+                }
+                emitter.completeWithError(ex);
+            }
+        });
+        return emitter;
+    }
+
+    /** 结束面试，生成总评报告。 */
+    @PostMapping("/interview/{sessionId}/end")
+    public InterviewSessionResponse endInterview(
+            @PathVariable("sessionId") Long sessionId,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return mockInterviewService.endInterview(sessionId, user);
+    }
+
+    /** 查询面试会话的完整消息列表。 */
+    @GetMapping("/interview/{sessionId}/messages")
+    public InterviewSessionResponse interviewMessages(
+            @PathVariable("sessionId") Long sessionId,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return mockInterviewService.getMessages(sessionId, user);
+    }
+
+    /** 查询当前用户的面试历史列表。 */
+    @GetMapping("/interview/sessions")
+    public java.util.List<InterviewSessionResponse> interviewSessions(HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return mockInterviewService.listSessions(user);
     }
 
     // ==================== 全局异常处理 ====================

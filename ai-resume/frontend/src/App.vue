@@ -73,6 +73,7 @@
           <!-- 功能标签页切换（管理员可见更多标签） -->
           <section class="tabs side-tabs">
             <button :class="{ active: tab === 'analyze' }" @click="tab = 'analyze'">简历分析</button>
+            <button :class="{ active: tab === 'interview' }" @click="switchInterview">AI模拟面试</button>
             <button :class="{ active: tab === 'mine' }" @click="switchMine">我的记录</button>
             <button v-if="isAdmin" :class="{ active: tab === 'adminUsers' }" @click="switchAdminUsers">用户管理</button>
             <button v-if="isAdmin" :class="{ active: tab === 'adminConfig' }" @click="switchAdminConfig">模型配置</button>
@@ -155,6 +156,166 @@
           <ul>
             <li v-for="(q, idx) in result.optimized?.interviewQuestions || []" :key="idx">{{ q }}</li>
           </ul>
+        </div>
+      </section>
+
+      <!-- ===== AI模拟面试标签页 ===== -->
+      <section v-else-if="tab === 'interview'" class="card interview-card">
+        <h2>AI模拟面试</h2>
+
+        <div class="interview-layout">
+          <section class="interview-main">
+            <div v-if="!interview.sessionId" class="interview-start">
+              <form @submit.prevent="startInterviewSession">
+                <label>目标岗位</label>
+                <input v-model.trim="interviewForm.targetRole" type="text" placeholder="例如：后端开发工程师" required />
+
+                <label>岗位描述（JD，可粘贴文本或图片）</label>
+                <textarea
+                  v-model.trim="interviewForm.jdText"
+                  @paste="onInterviewJdPaste"
+                  rows="6"
+                  placeholder="可直接粘贴 JD 文本，也可在这里 Ctrl+V 粘贴截图"
+                />
+
+                <label>岗位JD图片（可选，支持上传或 Ctrl+V）</label>
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff"
+                  @change="onInterviewJdImageChange"
+                />
+                <div class="paste-hint" tabindex="0" @paste="onInterviewJdPaste">
+                  在此区域按 Ctrl+V 可直接粘贴 JD 截图
+                </div>
+                <div v-if="interviewForm.jdImage" class="picked-file">
+                  <span>已选择图片：{{ interviewJdImageName }}</span>
+                  <button type="button" class="mini-btn neutral" @click="clearInterviewJdImage">移除</button>
+                </div>
+
+                <label>选择简历（推荐）</label>
+                <select v-model="interviewForm.resumeAnalysisId" @change="onInterviewResumeChange">
+                  <option value="">仅使用 JD 开始面试（不选简历）</option>
+                  <option v-for="item in mineItems" :key="`interview-resume-${item.id}`" :value="String(item.id)">
+                    #{{ item.id }} · {{ item.filename || "未命名简历" }} · {{ item.targetRole || "-" }} · {{ formatTime(item.createdAt) }}
+                  </option>
+                </select>
+                <p class="record-tip">“简历文本”已改为“选择简历”，无需再手工粘贴文字版简历。</p>
+                <details v-if="selectedInterviewResume" class="detail inline-detail">
+                  <summary>预览已选简历</summary>
+                  <pre>{{ selectedInterviewResume.resumeText || selectedInterviewResume.resumePreview || "-" }}</pre>
+                </details>
+
+                <div class="row-actions">
+                  <button :disabled="interviewStarting || interviewStreaming || interviewEnding">
+                    {{ interviewStarting ? "创建中..." : "开始模拟面试" }}
+                  </button>
+                  <button
+                    type="button"
+                    class="mini-btn neutral"
+                    :disabled="interviewStarting || interviewStreaming || interviewEnding"
+                    @click="fillInterviewFromAnalyze"
+                  >
+                    从当前分析结果填充
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div v-else class="interview-chat">
+              <div class="interview-head">
+                <div class="metrics interview-metrics">
+                  <div><span>会话ID</span><strong>{{ interview.sessionId }}</strong></div>
+                  <div><span>题目数</span><strong>{{ interview.questionCount || 0 }}</strong></div>
+                  <div><span>状态</span><strong>{{ interview.status || "-" }}</strong></div>
+                  <div><span>总分</span><strong>{{ interview.totalScore ?? "-" }}</strong></div>
+                </div>
+                <div class="row-actions">
+                  <button
+                    class="mini-btn neutral"
+                    :disabled="interviewStreaming || interviewEnding"
+                    @click="resetInterviewSessionState"
+                  >
+                    新开一场
+                  </button>
+                  <button
+                    class="mini-btn neutral"
+                    :disabled="interviewStreaming || interviewEnding"
+                    @click="loadInterviewMessages(interview.sessionId)"
+                  >
+                    刷新对话
+                  </button>
+                  <button
+                    class="mini-btn warn"
+                    :disabled="interviewEnding || interviewStreaming || interview.status === 'FINISHED'"
+                    @click="endInterviewSession"
+                  >
+                    {{ interviewEnding ? "结束中..." : "结束面试" }}
+                  </button>
+                </div>
+              </div>
+
+              <p class="message">{{ interviewMessage }}</p>
+
+              <div class="interview-messages">
+                <article
+                  v-for="msg in interview.messages"
+                  :key="msg.id || msg.localId"
+                  :class="['interview-msg', msg.role === 'USER' ? 'msg-user' : 'msg-ai']"
+                >
+                  <header>
+                    <strong>{{ msg.role === "USER" ? "我" : "面试官" }}</strong>
+                    <span>{{ formatTime(msg.createdAt) }}</span>
+                    <em v-if="msg.score !== null && msg.score !== undefined">评分 {{ msg.score }}/100</em>
+                  </header>
+                  <pre>{{ msg.content }}</pre>
+                </article>
+              </div>
+
+              <form class="interview-input" @submit.prevent="sendInterviewAnswer">
+                <textarea
+                  v-model.trim="interviewAnswer"
+                  rows="4"
+                  placeholder="输入你的回答..."
+                  :disabled="interviewStreaming || interviewEnding || interview.status === 'FINISHED'"
+                />
+                <button :disabled="interviewStreaming || interviewEnding || interview.status === 'FINISHED'">
+                  {{ interviewStreaming ? "AI 评分中..." : "发送回答" }}
+                </button>
+              </form>
+
+              <details v-if="interview.report" class="detail">
+                <summary>查看面试总评</summary>
+                <pre>{{ interview.report }}</pre>
+              </details>
+            </div>
+          </section>
+
+          <aside class="interview-side">
+            <div class="viewer-head">
+              <div>
+                <h3>历史会话</h3>
+                <p>点击可恢复完整问答</p>
+              </div>
+              <button class="mini-btn neutral" :disabled="interviewSessionsLoading" @click="loadInterviewSessions">
+                {{ interviewSessionsLoading ? "刷新中..." : "刷新" }}
+              </button>
+            </div>
+            <div class="interview-session-list">
+              <button
+                v-for="item in interviewSessions"
+                :key="item.sessionId"
+                class="session-item"
+                :class="{ active: interview.sessionId === item.sessionId }"
+                @click="openInterviewSession(item.sessionId)"
+              >
+                <strong>#{{ item.sessionId }}</strong>
+                <span>{{ item.targetRole || "-" }}</span>
+                <span>{{ item.status || "-" }}</span>
+                <span>{{ formatTime(item.createdAt) }}</span>
+              </button>
+              <p v-if="!interviewSessions.length" class="meta">暂无历史会话</p>
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -567,6 +728,36 @@ const queueJob = reactive({        // 当前排队任务状态
 
 let pollTimer = null;              // 轮询定时器引用
 
+// ===== AI 模拟面试 =====
+const interview = reactive({
+  sessionId: null,
+  status: "",
+  targetRole: "",
+  questionCount: 0,
+  totalScore: null,
+  createdAt: "",
+  finishedAt: "",
+  report: "",
+  messages: []
+});
+const interviewForm = reactive({
+  targetRole: "",
+  resumeAnalysisId: "",
+  jdText: "",
+  jdImage: null
+});
+const interviewJdImageMaxBytes = 5 * 1024 * 1024;
+const interviewJdImageExtPattern = /\.(png|jpe?g|bmp|webp|tif|tiff)$/i;
+const interviewJdImageMimePattern = /^image\/(png|jpe?g|bmp|webp|tiff?)$/i;
+const interviewSessions = ref([]);
+const interviewAnswer = ref("");
+const interviewMessage = ref("");
+const interviewStarting = ref(false);
+const interviewStreaming = ref(false);
+const interviewEnding = ref(false);
+const interviewSessionsLoading = ref(false);
+let interviewStreamReader = null;
+
 // ===== 我的记录 =====
 const mineItems = ref([]);         // 我的分析记录列表
 const mineMessage = ref("");       // 我的记录提示消息
@@ -641,6 +832,14 @@ const isAdmin = computed(() => (me.role || "").toUpperCase() === "ADMIN");
 const activeAuthForm = computed(() => (authMode.value === "login" ? loginForm : registerForm));
 // 计算属性：题库预览是否还有更多数据可加载
 const kbViewerHasMore = computed(() => kbViewer.questions.length < kbViewer.total);
+const selectedInterviewResume = computed(() => {
+  const selectedId = Number(interviewForm.resumeAnalysisId);
+  if (!Number.isFinite(selectedId) || selectedId <= 0) {
+    return null;
+  }
+  return mineItems.value.find((item) => Number(item.id) === selectedId) || null;
+});
+const interviewJdImageName = computed(() => String(interviewForm.jdImage?.name || "剪贴板图片"));
 
 // 统一注入鉴权头，避免每个请求重复拼 Authorization
 function authHeaders(extra = {}) {
@@ -704,6 +903,13 @@ function toZhMessage(message) {
     "no interview questions generated by model": "模型未返回可用面试题，请换主题或模型",
     "llm request failed": "调用大模型失败，请检查 URL、API Key 和模型",
     "llm response is empty": "模型返回为空，请重试",
+    "interview session not found": "面试会话不存在",
+    "cannot access this interview session": "无权访问该面试会话",
+    "interview already finished": "面试已结束",
+    "answer cannot be empty": "回答不能为空",
+    "target role is required": "目标岗位不能为空",
+    "resume text or jd text is required": "请提供简历文本或岗位描述",
+    "interview stream failed": "模拟面试流式响应失败",
     queued: "已进入队列",
     "VIP priority queued": "已进入VIP优先队列"
   };
@@ -778,6 +984,7 @@ function statusClass(status) {
 function tabTitle(tabKey) {
   const map = {
     analyze: "简历分析",
+    interview: "AI模拟面试",
     mine: "我的记录",
     adminUsers: "用户管理",
     adminConfig: "模型配置",
@@ -879,6 +1086,413 @@ async function submitAuth() {
   }
 }
 
+function resetInterviewSessionState() {
+  interview.sessionId = null;
+  interview.status = "";
+  interview.targetRole = "";
+  interview.questionCount = 0;
+  interview.totalScore = null;
+  interview.createdAt = "";
+  interview.finishedAt = "";
+  interview.report = "";
+  interview.messages = [];
+  interviewAnswer.value = "";
+  interviewMessage.value = "";
+}
+
+function clearInterviewStreamReader() {
+  if (!interviewStreamReader) return;
+  try {
+    interviewStreamReader.cancel();
+  } catch {
+    // ignore
+  } finally {
+    interviewStreamReader = null;
+  }
+}
+
+async function fillInterviewFromAnalyze() {
+  if (!interviewForm.targetRole) {
+    interviewForm.targetRole = analyzeForm.targetRole || "";
+  }
+  if (!interviewForm.jdText) {
+    interviewForm.jdText = analyzeForm.jdText || "";
+  }
+  const analysisId = String(result.value?.analysisId || "").trim();
+  if (!interviewForm.resumeAnalysisId && analysisId) {
+    if (!mineItems.value.length) {
+      await loadMineAnalyses();
+    }
+    const matched = mineItems.value.find((item) => String(item.id) === analysisId);
+    if (matched) {
+      interviewForm.resumeAnalysisId = analysisId;
+      onInterviewResumeChange();
+      return;
+    }
+  }
+  interviewMessage.value = "已尝试从当前分析页填充岗位与 JD。";
+}
+
+function resolveInterviewResumeText() {
+  return String(selectedInterviewResume.value?.resumeText || "").trim();
+}
+
+function onInterviewResumeChange() {
+  const picked = selectedInterviewResume.value;
+  if (!picked) return;
+  if (!interviewForm.targetRole) {
+    interviewForm.targetRole = picked.targetRole || "";
+  }
+  if (!interviewForm.jdText) {
+    interviewForm.jdText = picked.jdText || picked.jdPreview || "";
+  }
+  interviewMessage.value = `已选择简历 #${picked.id}：${picked.filename || "未命名简历"}`;
+}
+
+function supportsInterviewJdImage(file) {
+  const filename = String(file?.name || "").trim();
+  const mimeType = String(file?.type || "").trim();
+  return interviewJdImageExtPattern.test(filename) || interviewJdImageMimePattern.test(mimeType);
+}
+
+function setInterviewJdImage(file, source = "upload") {
+  if (!file) return;
+  if (!supportsInterviewJdImage(file)) {
+    interviewMessage.value = toZhMessage("jd image format not supported");
+    return;
+  }
+  if ((file.size || 0) > interviewJdImageMaxBytes) {
+    interviewMessage.value = toZhMessage("jd image is too large");
+    return;
+  }
+  interviewForm.jdImage = file;
+  interviewMessage.value =
+    source === "paste"
+      ? "已粘贴 JD 图片，开始面试时会自动识别文字。"
+      : "已选择 JD 图片，开始面试时会自动识别文字。";
+}
+
+function onInterviewJdImageChange(e) {
+  const files = e.target.files || [];
+  setInterviewJdImage(files[0], "upload");
+}
+
+function onInterviewJdPaste(e) {
+  const items = Array.from(e?.clipboardData?.items || []);
+  const imageItem = items.find((item) => item.kind === "file" && String(item.type || "").startsWith("image/"));
+  if (!imageItem) return;
+  const file = imageItem.getAsFile();
+  if (!file) return;
+  e.preventDefault();
+  setInterviewJdImage(file, "paste");
+}
+
+function clearInterviewJdImage() {
+  interviewForm.jdImage = null;
+}
+
+function collectInterviewMissingKeywords() {
+  const list = Array.isArray(result.value?.missingKeywords) ? result.value.missingKeywords : [];
+  return list
+    .map((item) => String(item || "").trim())
+    .filter((item) => !!item)
+    .slice(0, 12);
+}
+
+function normalizeInterviewMessage(msg) {
+  const role = String(msg?.role || "AI").toUpperCase() === "USER" ? "USER" : "AI";
+  return {
+    id: msg?.id ?? null,
+    localId: msg?.localId || `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role,
+    content: String(msg?.content || ""),
+    score: msg?.score ?? null,
+    createdAt: msg?.createdAt || new Date().toISOString()
+  };
+}
+
+function applyInterviewMeta(data) {
+  interview.sessionId = data?.sessionId ?? interview.sessionId;
+  interview.status = data?.status || interview.status;
+  interview.targetRole = data?.targetRole || interview.targetRole;
+  interview.questionCount = data?.questionCount ?? interview.questionCount;
+  interview.totalScore = data?.totalScore ?? interview.totalScore;
+  interview.createdAt = data?.createdAt || interview.createdAt;
+  interview.finishedAt = data?.finishedAt || interview.finishedAt;
+  if (typeof data?.report === "string" && data.report) {
+    interview.report = data.report;
+  }
+}
+
+function upsertLatestAiMessage(latestAiMessage, streamMsg = null) {
+  if (!latestAiMessage) return;
+  const normalized = normalizeInterviewMessage(latestAiMessage);
+  if (streamMsg) {
+    streamMsg.id = normalized.id;
+    streamMsg.role = normalized.role;
+    streamMsg.content = normalized.content;
+    streamMsg.score = normalized.score;
+    streamMsg.createdAt = normalized.createdAt;
+    return;
+  }
+  const found = interview.messages.findIndex((item) => item.id && item.id === normalized.id);
+  if (found >= 0) {
+    interview.messages[found] = normalized;
+    return;
+  }
+  interview.messages.push(normalized);
+}
+
+function parseSsePayload(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
+function setInterviewStreamStage(stage) {
+  const map = {
+    received: "已收到回答，开始分析...",
+    evaluating: "AI 正在评分并生成建议..."
+  };
+  interviewMessage.value = map[stage] || interviewMessage.value;
+}
+
+async function loadInterviewSessions() {
+  interviewSessionsLoading.value = true;
+  try {
+    const data = await apiRequest("/interview/sessions");
+    interviewSessions.value = Array.isArray(data) ? data : [];
+  } catch (err) {
+    interviewMessage.value = toZhMessage(err.message || "加载面试会话失败");
+  } finally {
+    interviewSessionsLoading.value = false;
+  }
+}
+
+async function loadInterviewMessages(sessionId) {
+  if (!sessionId) return;
+  try {
+    const data = await apiRequest(`/interview/${sessionId}/messages`);
+    applyInterviewMeta(data);
+    interview.messages = Array.isArray(data.messages)
+      ? data.messages.map((msg) => normalizeInterviewMessage(msg))
+      : [];
+    if (interview.status === "FINISHED" && !interview.report) {
+      const lastAi = [...interview.messages].reverse().find((msg) => msg.role === "AI");
+      if (lastAi?.content) {
+        interview.report = lastAi.content;
+      }
+    }
+    interviewMessage.value = `已加载会话 #${sessionId}`;
+  } catch (err) {
+    interviewMessage.value = toZhMessage(err.message || "加载面试对话失败");
+  }
+}
+
+async function openInterviewSession(sessionId) {
+  if (!sessionId) return;
+  await loadInterviewMessages(sessionId);
+}
+
+async function startInterviewSession() {
+  const targetRole = (interviewForm.targetRole || analyzeForm.targetRole || "").trim();
+  const jdText = (interviewForm.jdText || analyzeForm.jdText || "").trim();
+  const resumeText = resolveInterviewResumeText();
+  if (!targetRole) {
+    interviewMessage.value = "请填写目标岗位";
+    return;
+  }
+  if (interviewForm.resumeAnalysisId && !selectedInterviewResume.value) {
+    interviewMessage.value = "所选简历不存在，请重新选择";
+    return;
+  }
+
+  interviewStarting.value = true;
+  interviewMessage.value = "";
+  clearInterviewStreamReader();
+  resetInterviewSessionState();
+  try {
+    const fd = new FormData();
+    fd.append("target_role", targetRole);
+    fd.append("resume_text", resumeText);
+    fd.append("jd_text", jdText);
+    for (const keyword of collectInterviewMissingKeywords()) {
+      fd.append("missing_keywords", keyword);
+    }
+    if (interviewForm.jdImage) {
+      fd.append("jd_image", interviewForm.jdImage);
+    }
+    const data = await apiRequest("/interview/start", {
+      method: "POST",
+      body: fd
+    });
+    applyInterviewMeta(data);
+    interview.messages = data.latestAiMessage ? [normalizeInterviewMessage(data.latestAiMessage)] : [];
+    interviewMessage.value = "模拟面试已开始，请先回答第一题。";
+    await loadInterviewSessions();
+  } catch (err) {
+    interviewMessage.value = toZhMessage(err.message || "启动模拟面试失败");
+  } finally {
+    interviewStarting.value = false;
+  }
+}
+
+async function sendInterviewAnswer() {
+  if (!interview.sessionId) {
+    interviewMessage.value = "请先开始模拟面试";
+    return;
+  }
+  if (interview.status === "FINISHED") {
+    interviewMessage.value = "当前会话已结束，请重新开始";
+    return;
+  }
+  const answer = interviewAnswer.value.trim();
+  if (!answer) {
+    interviewMessage.value = "请输入你的回答";
+    return;
+  }
+
+  interviewStreaming.value = true;
+  clearInterviewStreamReader();
+  const userMsg = normalizeInterviewMessage({ role: "USER", content: answer, createdAt: new Date().toISOString() });
+  interview.messages.push(userMsg);
+  interviewAnswer.value = "";
+
+  const streamAiMessage = normalizeInterviewMessage({ role: "AI", content: "", createdAt: new Date().toISOString() });
+  interview.messages.push(streamAiMessage);
+
+  try {
+    const res = await fetch(`${apiBase}/interview/${interview.sessionId}/answer/stream`, {
+      method: "POST",
+      headers: authHeaders({
+        "Content-Type": "application/json",
+        Accept: "text/event-stream"
+      }),
+      body: JSON.stringify({ answer })
+    });
+
+    if (!res.ok) {
+      let detail = `请求失败: ${res.status}`;
+      try {
+        const data = await res.json();
+        detail = data?.detail || detail;
+      } catch {
+        // ignore
+      }
+      throw new Error(detail);
+    }
+
+    if (!res.body) {
+      const fallback = await apiRequest(`/interview/${interview.sessionId}/answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer })
+      });
+      applyInterviewMeta(fallback);
+      upsertLatestAiMessage(fallback.latestAiMessage, streamAiMessage);
+      interviewMessage.value = "已完成评分，你可以继续回答下一题。";
+      await loadInterviewSessions();
+      return;
+    }
+
+    const reader = res.body.getReader();
+    interviewStreamReader = reader;
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let donePayload = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, "\n");
+      while (true) {
+        const idx = buffer.indexOf("\n\n");
+        if (idx < 0) break;
+        const chunk = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 2);
+        if (!chunk) continue;
+
+        const lines = chunk.split(/\r?\n/);
+        let eventName = "message";
+        const dataLines = [];
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            eventName = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trimStart());
+          }
+        }
+
+        const payload = parseSsePayload(dataLines.join("\n"));
+        if (eventName === "status") {
+          setInterviewStreamStage(payload?.stage || "");
+          continue;
+        }
+        if (eventName === "delta") {
+          const delta = typeof payload === "string" ? payload : String(payload?.content || "");
+          streamAiMessage.content += delta;
+          continue;
+        }
+        if (eventName === "done") {
+          if (payload && typeof payload === "object") {
+            donePayload = payload;
+          }
+          continue;
+        }
+        if (eventName === "error") {
+          const detail = typeof payload === "string" ? payload : payload?.detail;
+          throw new Error(detail || "interview stream failed");
+        }
+      }
+    }
+
+    if (donePayload && typeof donePayload === "object") {
+      applyInterviewMeta(donePayload);
+      upsertLatestAiMessage(donePayload.latestAiMessage, streamAiMessage);
+      if (Array.isArray(donePayload.messages)) {
+        interview.messages = donePayload.messages.map((msg) => normalizeInterviewMessage(msg));
+      }
+    } else {
+      await loadInterviewMessages(interview.sessionId);
+    }
+    interviewMessage.value = "已完成评分，你可以继续回答下一题。";
+    await loadInterviewSessions();
+  } catch (err) {
+    interview.messages = interview.messages.filter((msg) => msg.localId !== streamAiMessage.localId);
+    interviewMessage.value = toZhMessage(err.message || "提交回答失败");
+  } finally {
+    interviewStreaming.value = false;
+    interviewStreamReader = null;
+  }
+}
+
+async function endInterviewSession() {
+  if (!interview.sessionId) return;
+  interviewEnding.value = true;
+  try {
+    const data = await apiRequest(`/interview/${interview.sessionId}/end`, { method: "POST" });
+    applyInterviewMeta(data);
+    if (data.latestAiMessage) {
+      upsertLatestAiMessage(data.latestAiMessage);
+    }
+    if (data.report) {
+      interview.report = data.report;
+    }
+    interviewMessage.value = "面试已结束，已生成总评。";
+    await loadInterviewSessions();
+    await loadInterviewMessages(interview.sessionId);
+  } catch (err) {
+    interviewMessage.value = toZhMessage(err.message || "结束面试失败");
+  } finally {
+    interviewEnding.value = false;
+  }
+}
+
 // 停止轮询器，避免重复创建定时器或页面离开后继续请求
 function stopPolling() {
   if (pollTimer) {
@@ -918,7 +1532,9 @@ async function logout() {
     // ignore
   }
   stopPolling();
+  clearInterviewStreamReader();
   resetQueueJob();
+  resetInterviewSessionState();
   token.value = "";
   localStorage.removeItem(tokenKey);
   sessionStorage.removeItem(tokenKey);
@@ -928,6 +1544,11 @@ async function logout() {
   me.vip = false;
   me.blacklisted = false;
   result.value = null;
+  interviewSessions.value = [];
+  interviewForm.targetRole = "";
+  interviewForm.resumeAnalysisId = "";
+  interviewForm.jdText = "";
+  interviewForm.jdImage = null;
   mineItems.value = [];
   adminUsers.value = [];
   adminItems.value = [];
@@ -1419,6 +2040,12 @@ async function deleteKbDoc(docId) {
 }
 
 // 切换到"我的记录"标签并加载数据
+async function switchInterview() {
+  tab.value = "interview";
+  await Promise.all([loadInterviewSessions(), loadMineAnalyses()]);
+}
+
+// 切换到"我的记录"标签并加载数据
 async function switchMine() {
   tab.value = "mine";
   await loadMineAnalyses();
@@ -1466,5 +2093,6 @@ onMounted(async () => {
 // 组件销毁前清理轮询器，避免内存泄漏与无效请求
 onBeforeUnmount(() => {
   stopPolling();
+  clearInterviewStreamReader();
 });
 </script>

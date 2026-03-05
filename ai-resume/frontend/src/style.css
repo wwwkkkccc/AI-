@@ -844,6 +844,167 @@ tbody tr:hover {
   border-color: rgba(67, 75, 87, 0.34);
 }
 
+.interview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 12px;
+}
+
+.interview-main {
+  min-width: 0;
+}
+
+.paste-hint {
+  margin-top: 6px;
+  border: 1px dashed #b9c7d8;
+  border-radius: 10px;
+  padding: 10px;
+  color: #5f6f83;
+  font-size: 12px;
+  background: rgba(241, 246, 252, 0.86);
+}
+
+.paste-hint:focus {
+  outline: none;
+  border-color: #6a7e97;
+  box-shadow: 0 0 0 2px rgba(106, 126, 151, 0.18);
+}
+
+.picked-file {
+  margin-top: 8px;
+  border: 1px solid #d1dae5;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #516176;
+  font-size: 12px;
+  background: rgba(244, 248, 253, 0.92);
+}
+
+.interview-side {
+  border: 1px solid #d1d9e4;
+  border-radius: 12px;
+  background: rgba(244, 248, 253, 0.86);
+  padding: 10px;
+}
+
+.interview-session-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.session-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #cfd8e4;
+  border-radius: 10px;
+  background: #f8fbff;
+  color: #415065;
+  padding: 10px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+}
+
+.session-item strong {
+  font-size: 14px;
+}
+
+.session-item span {
+  font-size: 12px;
+  color: #5f6e83;
+}
+
+.session-item.active {
+  border-color: #60728b;
+  background: linear-gradient(145deg, rgba(223, 232, 244, 0.9), rgba(236, 242, 250, 0.88));
+}
+
+.interview-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.interview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.interview-metrics {
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+}
+
+.interview-messages {
+  border: 1px solid #d2dce8;
+  border-radius: 12px;
+  background: rgba(244, 248, 252, 0.74);
+  padding: 10px;
+  max-height: 520px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.interview-msg {
+  border-radius: 10px;
+  padding: 10px;
+  border: 1px solid #d3dce7;
+  background: #f9fbfe;
+  max-width: 88%;
+}
+
+.msg-ai {
+  align-self: flex-start;
+  background: linear-gradient(145deg, rgba(241, 246, 252, 0.95), rgba(248, 251, 255, 0.95));
+}
+
+.msg-user {
+  align-self: flex-end;
+  background: linear-gradient(145deg, rgba(232, 239, 248, 0.95), rgba(240, 246, 253, 0.95));
+}
+
+.interview-msg header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: #5a687d;
+  font-size: 12px;
+}
+
+.interview-msg header strong {
+  font-size: 13px;
+  color: #3f4c61;
+}
+
+.interview-msg header em {
+  font-style: normal;
+  color: #4e5e74;
+}
+
+.interview-msg pre {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  color: #2f3947;
+  font-family: inherit;
+}
+
+.interview-input textarea {
+  min-height: 86px;
+}
+
 @media (max-width: 1140px) {
   .workspace {
     grid-template-columns: 1fr;
@@ -862,6 +1023,10 @@ tbody tr:hover {
     width: auto;
     min-width: 140px;
     text-align: center;
+  }
+
+  .interview-layout {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -898,6 +1063,14 @@ tbody tr:hover {
   .record-toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .interview-head {
+    flex-direction: column;
+  }
+
+  .interview-metrics {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
 
   table {
