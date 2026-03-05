@@ -22,11 +22,14 @@ Thumbs.db
 
 # Env
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 
 # Logs
 *.log
+logs/
 npm-debug.log*
 
 # Python
@@ -35,3 +38,6 @@ __pycache__/
 
 # Gradle
 .gradle/
+
+# Jenkins local data
+jenkins_home/
