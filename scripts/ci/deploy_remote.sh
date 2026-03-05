@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # Usage:
-# DEPLOY_HOST=45.207.201.227 DEPLOY_USER=root DEPLOY_PATH=/opt/ai-resume ./scripts/ci/deploy_remote.sh
+# DEPLOY_HOST=45.207.201.227 DEPLOY_USER=root DEPLOY_PATH=/opt/resume-ai-stack ./scripts/ci/deploy_remote.sh
 
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 DEPLOY_HOST="${DEPLOY_HOST:-45.207.201.227}"
 DEPLOY_PORT="${DEPLOY_PORT:-22}"
 DEPLOY_USER="${DEPLOY_USER:-root}"
-DEPLOY_PATH="${DEPLOY_PATH:-/opt/ai-resume}"
+DEPLOY_PATH="${DEPLOY_PATH:-/opt/resume-ai-stack}"
 PACKAGE_TAG="${PACKAGE_TAG:-local}"
 
 if [ -z "${DEPLOY_PATH}" ] || [ "${DEPLOY_PATH}" = "/" ]; then

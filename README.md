@@ -61,6 +61,6 @@ curl http://127.0.0.1:18081/api/health
 DEPLOY_HOST=45.207.201.227 \
 DEPLOY_PORT=22 \
 DEPLOY_USER=root \
-DEPLOY_PATH=/opt/ai-resume \
+DEPLOY_PATH=/opt/resume-ai-stack \
 ./scripts/ci/deploy_remote.sh
 ```

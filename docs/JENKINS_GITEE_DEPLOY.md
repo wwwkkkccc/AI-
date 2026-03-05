@@ -58,7 +58,7 @@ docker compose up -d
 - `DEPLOY_HOST=45.207.201.227`
 - `DEPLOY_PORT=22`
 - `DEPLOY_USER=root`
-- `DEPLOY_PATH=/opt/ai-resume`
+- `DEPLOY_PATH=/opt/resume-ai-stack`
 - `DEPLOY_BRANCH=main`
 
 ## 9. 常见问题

@@ -13,7 +13,7 @@ pipeline {
     string(name: "DEPLOY_HOST", defaultValue: "45.207.201.227", description: "Deploy server host")
     string(name: "DEPLOY_PORT", defaultValue: "22", description: "Deploy server SSH port")
     string(name: "DEPLOY_USER", defaultValue: "root", description: "Deploy server SSH user")
-    string(name: "DEPLOY_PATH", defaultValue: "/opt/ai-resume", description: "Deploy directory on server")
+    string(name: "DEPLOY_PATH", defaultValue: "/opt/resume-ai-stack", description: "Deploy directory on server")
   }
 
   environment {
