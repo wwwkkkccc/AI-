@@ -8,25 +8,34 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
+/**
+ * 用户会话表，管理用户登录后的会话token及其有效期
+ */
 @Entity
 @Table(name = "user_sessions")
 public class UserSession {
+    // 自增主键ID
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // 会话token（唯一）
     @Column(name = "token", nullable = false, unique = true, length = 128)
     private String token;
 
+    // 关联的用户ID
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    // 会话创建时间
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    // 会话过期时间
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    // 用户最后活跃时间
     @Column(name = "last_seen_at")
     private Instant lastSeenAt;
 

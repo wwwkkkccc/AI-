@@ -9,48 +9,64 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
+/**
+ * 简历分析结果记录表，保存每次分析完成后的评分、覆盖率等详细结果
+ */
 @Entity
 @Table(name = "analysis_records")
 public class AnalysisRecord {
+    // 自增主键ID
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // 记录创建时间
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    // 简历文件名
     @Column(name = "filename", length = 255)
     private String filename;
 
+    // 所属用户ID
     @Column(name = "user_id")
     private Long userId;
 
+    // 所属用户名
     @Column(name = "username", length = 64)
     private String username;
 
+    // 目标岗位名称
     @Column(name = "target_role", length = 255)
     private String targetRole;
 
+    // 职位描述（JD）文本
     @Lob
     @Column(name = "jd_text", nullable = false, columnDefinition = "LONGTEXT")
     private String jdText;
 
+    // 简历原文文本
     @Lob
     @Column(name = "resume_text", nullable = false, columnDefinition = "LONGTEXT")
     private String resumeText;
 
+    // 简历匹配评分
     @Column(name = "score", nullable = false)
     private Double score;
 
+    // JD关键词覆盖率
     @Column(name = "coverage", nullable = false)
     private Double coverage;
 
+    // 优化建议摘要
     @Column(name = "optimized_summary", length = 1000)
     private String optimizedSummary;
 
+    // 是否使用了AI模型进行分析
     @Column(name = "model_used")
     private Boolean modelUsed = false;
 
+    // 完整分析结果JSON
     @Lob
     @Column(name = "result_json", columnDefinition = "LONGTEXT")
     private String resultJson;

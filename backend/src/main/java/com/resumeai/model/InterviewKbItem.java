@@ -10,6 +10,9 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
+/**
+ * 面试知识库题目表，存储从文档中解析出的单条面试题及其关键词
+ */
 @Entity
 @Table(
         name = "interview_kb_items",
@@ -18,20 +21,25 @@ import java.time.Instant;
         }
 )
 public class InterviewKbItem {
+    // 自增主键ID
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // 所属文档ID，关联interview_kb_docs表
     @Column(name = "doc_id", nullable = false)
     private Long docId;
 
+    // 面试题文本内容
     @Lob
     @Column(name = "question_text", nullable = false, columnDefinition = "LONGTEXT")
     private String questionText;
 
+    // 面试题关键词，用于检索匹配
     @Column(name = "keywords", length = 1200)
     private String keywords;
 
+    // 记录创建时间
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

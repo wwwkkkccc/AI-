@@ -2,13 +2,23 @@ package com.resumeai.dto;
 
 import java.time.Instant;
 
+/**
+ * 管理员用户列表项 DTO，用于管理员查询用户列表时返回的单个用户信息
+ */
 public class AdminUserItem {
+    /** 用户 ID */
     private Long id;
+    /** 用户名 */
     private String username;
+    /** 用户角色（如 ADMIN、USER） */
     private String role;
+    /** 是否为 VIP 用户 */
     private Boolean vip;
+    /** 是否被拉黑 */
     private Boolean blacklisted;
+    /** 账号创建时间 */
     private Instant createdAt;
+    /** 最后登录时间 */
     private Instant lastLoginAt;
 
     public Long getId() {

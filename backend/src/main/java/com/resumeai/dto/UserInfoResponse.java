@@ -1,10 +1,18 @@
 package com.resumeai.dto;
 
+/**
+ * 用户信息响应 DTO，用于返回当前登录用户的基本信息
+ */
 public class UserInfoResponse {
+    /** 用户 ID */
     private Long id;
+    /** 用户名 */
     private String username;
+    /** 用户角色（如 ADMIN、USER） */
     private String role;
+    /** 是否为 VIP 用户 */
     private Boolean vip;
+    /** 是否被拉黑 */
     private Boolean blacklisted;
 
     public Long getId() {

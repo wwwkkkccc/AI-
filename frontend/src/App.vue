@@ -1,10 +1,13 @@
 ﻿<template>
+  <!-- 根容器：未登录时使用 page-auth 样式 -->
   <div class="page" :class="{ 'page-auth': !token }">
+    <!-- 顶部标题栏（仅登录后显示） -->
     <header v-if="token" class="top">
       <h1>AI 简历分析系统</h1>
       <p>支持排队分析、VIP 优先、用户管理与配置管理</p>
     </header>
 
+    <!-- ===== 登录/注册页面 ===== -->
     <section v-if="!token" class="auth-screen">
       <div class="auth-wrapper">
         <form class="auth-form" @submit.prevent="submitAuth">
@@ -47,14 +50,17 @@
       </div>
     </section>
 
+    <!-- ===== 登录后主工作区 ===== -->
     <template v-else>
       <div class="workspace">
+        <!-- 左侧导航面板 -->
         <aside class="side-panel">
           <div class="brand-block">
             <h1>AI 简历分析系统</h1>
             <p>淡雅灰与暗金色工作台</p>
           </div>
 
+          <!-- 当前用户信息展示区 -->
           <section class="side-user">
             <div>
               <strong>{{ me.username }}</strong>
@@ -64,6 +70,7 @@
             </div>
           </section>
 
+          <!-- 功能标签页切换（管理员可见更多标签） -->
           <section class="tabs side-tabs">
             <button :class="{ active: tab === 'analyze' }" @click="tab = 'analyze'">简历分析</button>
             <button :class="{ active: tab === 'mine' }" @click="switchMine">我的记录</button>
@@ -76,7 +83,9 @@
           <p class="side-note">VIP 用户任务会被优先消费</p>
         </aside>
 
+        <!-- 右侧主内容区 -->
         <main class="content-panel">
+          <!-- 页面标题栏与退出按钮 -->
           <section class="main-head">
             <div>
               <h2>{{ tabTitle(tab) }}</h2>
@@ -85,8 +94,10 @@
             <button class="ghost" @click="logout">退出登录</button>
           </section>
 
+          <!-- ===== 简历分析标签页 ===== -->
           <section v-if="tab === 'analyze'" class="card">
         <h2>简历分析</h2>
+        <!-- 简历分析表单：上传文件、填写岗位和JD -->
         <form @submit.prevent="submitAnalyze">
           <label>目标岗位</label>
           <input v-model.trim="analyzeForm.targetRole" type="text" placeholder="例如：后端开发工程师" />
@@ -104,6 +115,7 @@
         </form>
         <p class="message">{{ analyzeMessage }}</p>
 
+        <!-- 任务排队状态面板 -->
         <div v-if="queueJob.jobId" class="queue-panel">
           <h3>当前任务</h3>
           <div class="queue-grid">
@@ -127,6 +139,7 @@
           <button class="mini-btn" @click="refreshCurrentJob" :disabled="!queueJob.jobId">手动刷新状态</button>
         </div>
 
+        <!-- 分析结果展示区：评分、关键词、优化建议、面试问题 -->
         <div v-if="result" class="result">
           <div class="metrics">
             <div><span>匹配评分</span><strong>{{ result.score }}</strong></div>
@@ -145,6 +158,7 @@
         </div>
       </section>
 
+      <!-- ===== 我的简历记录标签页 ===== -->
       <section v-else-if="tab === 'mine'" class="card">
         <h2>我的简历记录</h2>
         <div class="record-toolbar">
@@ -198,6 +212,7 @@
         </div>
       </section>
 
+      <!-- ===== 管理员 - 用户管理标签页 ===== -->
       <section v-else-if="tab === 'adminUsers'" class="card">
         <h2>管理员 - 用户管理</h2>
         <div class="inline">
@@ -252,6 +267,7 @@
         </div>
       </section>
 
+      <!-- ===== 管理员 - 模型配置标签页 ===== -->
       <section v-else-if="tab === 'adminConfig'" class="card">
         <h2>管理员 - 模型配置</h2>
         <form @submit.prevent="saveConfig">
@@ -270,6 +286,7 @@
         <p class="meta" v-if="configUpdatedAt">最近更新时间：{{ formatTime(configUpdatedAt) }}</p>
       </section>
 
+      <!-- ===== 管理员 - 客户简历数据标签页 ===== -->
       <section v-else-if="tab === 'adminData'" class="card">
         <h2>管理员 - 客户简历数据</h2>
         <div class="inline">
@@ -347,9 +364,11 @@
         </div>
       </section>
 
+      <!-- ===== 管理员 - 面试题库标签页 ===== -->
       <section v-else class="card">
         <h2>管理员 - 面试题库</h2>
         <div class="kb-grid">
+          <!-- 方式一：手动上传面试文档 -->
           <form class="kb-block" @submit.prevent="uploadKbDoc">
             <h3>文档上传入库</h3>
             <label>文档标题（可选）</label>
@@ -361,6 +380,7 @@
             <button :disabled="kbUploadLoading || kbCrawlLoading || kbLlmLoading">{{ kbUploadLoading ? '上传中...' : '上传并入库' }}</button>
           </form>
 
+          <!-- 方式二：爬虫自动抓取入库 -->
           <form class="kb-block" @submit.prevent="crawlKbDocs">
             <h3>爬虫一键入库</h3>
             <label>种子链接（必填）</label>
@@ -412,6 +432,7 @@
             <button :disabled="kbUploadLoading || kbCrawlLoading || kbLlmLoading">{{ kbCrawlLoading ? '爬取中...' : '开始爬取并入库' }}</button>
           </form>
 
+          <!-- 方式三：大模型生成面试题入库 -->
           <form class="kb-block" @submit.prevent="llmImportKbDocs">
             <h3>大模型生成入库</h3>
             <label>知识主题（必填）</label>
@@ -477,6 +498,7 @@
           </table>
         </div>
 
+        <!-- 题库文档内容预览弹窗 -->
         <section v-if="kbViewer.visible" class="kb-viewer">
           <div class="viewer-head">
             <div>
@@ -506,115 +528,118 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 
 // ===== 基础配置 =====
-const apiBase = "./api";
-const tokenKey = "resume_ai_token";
+const apiBase = "./api";           // API 请求基础路径（相对路径，由 Nginx 代理到后端）
+const tokenKey = "resume_ai_token"; // 本地存储中 token 的键名
 
 // ===== 登录态与当前用户 =====
-const tab = ref("analyze");
-const token = ref(localStorage.getItem(tokenKey) || sessionStorage.getItem(tokenKey) || "");
-const me = reactive({ id: null, username: "", role: "", vip: false, blacklisted: false });
-const authLoading = ref(false);
-const authMessage = ref("");
-const authMode = ref("login");
-const rememberMe = ref(true);
+const tab = ref("analyze");        // 当前激活的标签页
+const token = ref(localStorage.getItem(tokenKey) || sessionStorage.getItem(tokenKey) || ""); // 登录令牌
+const me = reactive({ id: null, username: "", role: "", vip: false, blacklisted: false }); // 当前登录用户信息
+const authLoading = ref(false);    // 登录/注册请求加载状态
+const authMessage = ref("");       // 登录/注册提示消息
+const authMode = ref("login");     // 当前认证模式：login 或 register
+const rememberMe = ref(true);      // 是否记住登录状态
 
-const loginForm = reactive({ username: "", password: "" });
-const registerForm = reactive({ username: "", password: "" });
+const loginForm = reactive({ username: "", password: "" });    // 登录表单数据
+const registerForm = reactive({ username: "", password: "" }); // 注册表单数据
 
 // ===== 简历分析页状态 =====
-const analyzeLoading = ref(false);
-const analyzeMessage = ref("");
-const result = ref(null);
-const analyzeForm = reactive({
-  targetRole: "",
-  jdText: "",
-  file: null,
-  jdImage: null
+const analyzeLoading = ref(false); // 分析任务提交加载状态
+const analyzeMessage = ref("");    // 分析页提示消息
+const result = ref(null);          // 分析结果数据
+const analyzeForm = reactive({     // 分析表单数据
+  targetRole: "",                  // 目标岗位
+  jdText: "",                      // 岗位描述文本
+  file: null,                      // 简历文件
+  jdImage: null                    // JD 截图文件
 });
 
-const queueJob = reactive({
-  jobId: "",
-  status: "",
-  queuePosition: null,
-  vipPriority: false,
-  errorMessage: "",
-  createdAt: "",
-  startedAt: "",
-  finishedAt: ""
+const queueJob = reactive({        // 当前排队任务状态
+  jobId: "",                       // 任务 ID
+  status: "",                      // 任务状态（PENDING/PROCESSING/DONE/FAILED）
+  queuePosition: null,             // 排队位置
+  vipPriority: false,              // 是否 VIP 优先
+  errorMessage: "",                // 错误信息
+  createdAt: "",                   // 创建时间
+  startedAt: "",                   // 开始处理时间
+  finishedAt: ""                   // 完成时间
 });
 
-let pollTimer = null;
+let pollTimer = null;              // 轮询定时器引用
 
 // ===== 我的记录 =====
-const mineItems = ref([]);
-const mineMessage = ref("");
+const mineItems = ref([]);         // 我的分析记录列表
+const mineMessage = ref("");       // 我的记录提示消息
 
 // ===== 管理端：用户管理 =====
-const adminUsers = ref([]);
-const adminUserQuery = reactive({ keyword: "" });
-const adminUsersMessage = ref("");
-const adminUserLoadingId = ref(null);
+const adminUsers = ref([]);        // 用户列表
+const adminUserQuery = reactive({ keyword: "" }); // 用户搜索关键词
+const adminUsersMessage = ref(""); // 用户管理提示消息
+const adminUserLoadingId = ref(null); // 正在操作的用户 ID（防重复点击）
 
 // ===== 管理端：模型配置 =====
-const configLoading = ref(false);
-const configMessage = ref("");
-const configUpdatedAt = ref("");
-const configForm = reactive({
-  baseUrl: "",
-  apiKey: "",
-  model: ""
+const configLoading = ref(false);  // 配置保存加载状态
+const configMessage = ref("");     // 配置提示消息
+const configUpdatedAt = ref("");   // 配置最近更新时间
+const configForm = reactive({      // 模型配置表单
+  baseUrl: "",                     // AI 接口地址
+  apiKey: "",                      // API 密钥
+  model: ""                        // 模型名称
 });
 
 // ===== 管理端：客户简历 =====
-const adminQuery = reactive({ username: "" });
-const adminItems = ref([]);
-const adminMessage = ref("");
+const adminQuery = reactive({ username: "" }); // 客户简历搜索条件
+const adminItems = ref([]);        // 客户简历列表
+const adminMessage = ref("");      // 客户简历提示消息
 
 // ===== 管理端：面试题库 =====
-const kbDocs = ref([]);
-const kbMessage = ref("");
-const kbUploadLoading = ref(false);
-const kbCrawlLoading = ref(false);
-const kbLlmLoading = ref(false);
-const kbCrawlErrors = ref([]);
-const kbUploadForm = reactive({
+const kbDocs = ref([]);            // 题库文档列表
+const kbMessage = ref("");         // 题库操作提示消息
+const kbUploadLoading = ref(false);  // 文档上传加载状态
+const kbCrawlLoading = ref(false);   // 爬虫入库加载状态
+const kbLlmLoading = ref(false);     // 大模型生成加载状态
+const kbCrawlErrors = ref([]);       // 爬虫失败页面列表
+const kbUploadForm = reactive({      // 文档上传表单
   title: "",
   file: null
 });
-const kbCrawlForm = reactive({
-  seedUrl: "",
-  title: "",
-  topic: "",
-  maxPages: 20,
-  maxDepth: 1,
-  sameDomainOnly: true,
-  authCookie: "",
-  referer: "",
-  authHeader: ""
+const kbCrawlForm = reactive({       // 爬虫入库表单
+  seedUrl: "",                       // 种子链接
+  title: "",                         // 文档标题
+  topic: "",                         // 主题标签
+  maxPages: 20,                      // 最大爬取页数
+  maxDepth: 1,                       // 最大爬取深度
+  sameDomainOnly: true,              // 是否仅抓取同域链接
+  authCookie: "",                    // 私有站点 Cookie
+  referer: "",                       // Referer 头
+  authHeader: ""                     // Authorization 头
 });
-const kbLlmForm = reactive({
-  topic: "",
-  title: "",
-  baseUrl: "",
-  apiKey: "",
-  model: "",
-  questionCount: 30
+const kbLlmForm = reactive({         // 大模型生成表单
+  topic: "",                         // 知识主题
+  title: "",                         // 文档标题
+  baseUrl: "",                       // 模型接口地址
+  apiKey: "",                        // 模型 API Key
+  model: "",                         // 模型名称
+  questionCount: 30                  // 生成题目数量
 });
-const kbViewLoading = ref(false);
-const kbViewMessage = ref("");
-const kbViewer = reactive({
-  visible: false,
-  docId: null,
-  title: "",
-  filename: "",
-  total: 0,
-  page: 0,
-  size: 100,
-  questions: []
+const kbViewLoading = ref(false);    // 题库预览加载状态
+const kbViewMessage = ref("");       // 题库预览提示消息
+const kbViewer = reactive({          // 题库文档预览器状态
+  visible: false,                    // 是否显示预览
+  docId: null,                       // 当前预览的文档 ID
+  title: "",                         // 文档标题
+  filename: "",                      // 文件名
+  total: 0,                          // 题目总数
+  page: 0,                           // 当前页码
+  size: 100,                         // 每页条数
+  questions: []                      // 已加载的题目列表
 });
 
+// 计算属性：当前用户是否为管理员
 const isAdmin = computed(() => (me.role || "").toUpperCase() === "ADMIN");
+// 计算属性：根据认证模式返回对应的表单对象
 const activeAuthForm = computed(() => (authMode.value === "login" ? loginForm : registerForm));
+// 计算属性：题库预览是否还有更多数据可加载
 const kbViewerHasMore = computed(() => kbViewer.questions.length < kbViewer.total);
 
 // 统一注入鉴权头，避免每个请求重复拼 Authorization
@@ -626,6 +651,7 @@ function authHeaders(extra = {}) {
   return headers;
 }
 
+// 将后端英文错误消息映射为中文提示
 function toZhMessage(message) {
   const msg = String(message || "").trim();
   const map = {
@@ -684,23 +710,29 @@ function toZhMessage(message) {
   return map[msg] || msg || "请求失败";
 }
 
+// 将角色标识转为中文显示文本
 function roleText(role) {
   return (role || "").toUpperCase() === "ADMIN" ? "管理员" : "普通用户";
 }
 
+// 布尔值转中文"是/否"
 function booleanText(v) {
   return v ? "是" : "否";
 }
 
+// 安全转数字，非法值返回 0
 function asNumber(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
 
+// 格式化评分为两位小数
+// 格式化评分为两位小数
 function formatScore(value) {
   return asNumber(value).toFixed(2);
 }
 
+// 根据评分返回对应的 CSS 等级类名（高/中/低）
 function scoreLevelClass(value) {
   const n = asNumber(value);
   if (n >= 75) return "score-high";
@@ -708,17 +740,21 @@ function scoreLevelClass(value) {
   return "score-low";
 }
 
+// 将覆盖率转为百分比字符串（用于进度条宽度）
+// 将覆盖率转为百分比字符串（用于进度条宽度）
 function coveragePercent(value) {
   const n = Math.max(0, Math.min(100, asNumber(value)));
   return `${n}%`;
 }
 
+// 格式化覆盖率为百分比显示文本
 function formatCoverage(value) {
   const n = Math.max(0, Math.min(100, asNumber(value)));
   const rounded = Math.round(n * 100) / 100;
   return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(2)}%`;
 }
 
+// 将任务状态码转为中文文本
 function statusText(status) {
   const map = {
     PENDING: "排队中",
@@ -729,6 +765,7 @@ function statusText(status) {
   return map[status] || status || "-";
 }
 
+// 根据任务状态返回对应的 CSS 类名（用于颜色区分）
 function statusClass(status) {
   const v = String(status || "").toUpperCase();
   if (v === "DONE") return "status-done";
@@ -737,6 +774,7 @@ function statusClass(status) {
   return "status-pending";
 }
 
+// 根据标签页 key 返回中文标题
 function tabTitle(tabKey) {
   const map = {
     analyze: "简历分析",
@@ -749,6 +787,7 @@ function tabTitle(tabKey) {
   return map[tabKey] || "工作台";
 }
 
+// 通用 API 请求封装：自动注入鉴权头、解析 JSON、统一错误处理
 async function apiRequest(path, options = {}) {
   const opts = { ...options, headers: authHeaders(options.headers || {}) };
   const res = await fetch(`${apiBase}${path}`, opts);
@@ -776,15 +815,19 @@ function persistToken(newToken) {
   }
 }
 
+// 切换认证模式（登录 <-> 注册）
 function setAuthMode(mode) {
   authMode.value = mode;
   authMessage.value = "";
 }
 
+// 切换登录/注册模式
+// 快捷切换登录/注册模式
 function toggleAuthMode() {
   setAuthMode(authMode.value === "login" ? "register" : "login");
 }
 
+// 提交登录请求，成功后保存 token 并加载用户信息
 async function submitLogin() {
   authLoading.value = true;
   authMessage.value = "";
@@ -805,6 +848,7 @@ async function submitLogin() {
   }
 }
 
+// 提交注册请求，成功后自动登录
 async function submitRegister() {
   authLoading.value = true;
   authMessage.value = "";
@@ -825,6 +869,8 @@ async function submitRegister() {
   }
 }
 
+// 统一认证提交入口：根据当前模式调用登录或注册
+// 统一认证提交入口：根据当前模式调用登录或注册
 async function submitAuth() {
   if (authMode.value === "login") {
     await submitLogin();
@@ -841,6 +887,7 @@ function stopPolling() {
   }
 }
 
+// 重置排队任务状态
 function resetQueueJob() {
   queueJob.jobId = "";
   queueJob.status = "";
@@ -906,21 +953,25 @@ async function logout() {
   closeKbDocViewer();
 }
 
+// 简历文件选择回调
 function onFileChange(e) {
   const files = e.target.files || [];
   analyzeForm.file = files[0] || null;
 }
 
+// JD 图片文件选择回调
 function onJdImageChange(e) {
   const files = e.target.files || [];
   analyzeForm.jdImage = files[0] || null;
 }
 
+// 题库文档文件选择回调
 function onKbFileChange(e) {
   const files = e.target.files || [];
   kbUploadForm.file = files[0] || null;
 }
 
+// 轮询任务状态：根据状态更新 UI，完成或失败时停止轮询
 async function pollJobStatus(jobId) {
   if (!jobId) return;
   try {
@@ -971,6 +1022,8 @@ function startPolling(jobId) {
   }, 1500);
 }
 
+// 手动刷新当前任务状态
+// 手动刷新当前任务状态
 async function refreshCurrentJob() {
   if (!queueJob.jobId) return;
   await pollJobStatus(queueJob.jobId);
@@ -1029,6 +1082,7 @@ async function submitAnalyze() {
 }
 
 // ===== 业务列表加载函数 =====
+// 加载我的分析记录列表（分页）
 async function loadMineAnalyses() {
   try {
     const data = await apiRequest("/analyses/mine?page=0&size=20");
@@ -1039,6 +1093,7 @@ async function loadMineAnalyses() {
   }
 }
 
+// 加载管理员用户列表（支持关键词搜索）
 async function loadAdminUsers() {
   try {
     const keyword = encodeURIComponent(adminUserQuery.keyword || "");
@@ -1050,6 +1105,7 @@ async function loadAdminUsers() {
   }
 }
 
+// 更新用户标记（VIP/拉黑），更新后刷新列表
 async function updateUserFlags(userId, payload) {
   adminUserLoadingId.value = userId;
   adminUsersMessage.value = "";
@@ -1068,14 +1124,19 @@ async function updateUserFlags(userId, payload) {
   }
 }
 
+// 切换用户 VIP 状态
+// 切换用户 VIP 状态
 async function toggleVip(user) {
   await updateUserFlags(user.id, { vip: !user.vip });
 }
 
+// 切换用户拉黑状态
 async function toggleBlacklist(user) {
   await updateUserFlags(user.id, { blacklisted: !user.blacklisted });
 }
 
+// 加载当前模型配置（管理员）
+// 加载当前模型配置（管理员）
 async function loadConfig() {
   try {
     const data = await apiRequest("/admin/config");
@@ -1107,6 +1168,8 @@ async function loadLlmDefaultsFromConfig() {
   }
 }
 
+// 保存模型配置到后端
+// 保存模型配置到后端
 async function saveConfig() {
   configLoading.value = true;
   configMessage.value = "";
@@ -1125,6 +1188,8 @@ async function saveConfig() {
   }
 }
 
+// 加载管理员客户简历数据（支持按用户名搜索）
+// 加载管理员客户简历数据（支持按用户名搜索）
 async function loadAdminAnalyses() {
   try {
     const query = encodeURIComponent(adminQuery.username || "");
@@ -1136,6 +1201,7 @@ async function loadAdminAnalyses() {
   }
 }
 
+// 加载面试题库文档列表
 async function loadKbDocs() {
   try {
     const data = await apiRequest("/admin/interview-kb/docs?page=0&size=50");
@@ -1147,6 +1213,7 @@ async function loadKbDocs() {
 }
 
 // ===== 题库查看器 =====
+// 打开题库文档预览器，初始化并加载第一页
 async function openKbDocViewer(item) {
   kbViewer.visible = true;
   kbViewer.docId = item?.id ?? null;
@@ -1160,6 +1227,7 @@ async function openKbDocViewer(item) {
   await loadKbDocViewer(true);
 }
 
+// 关闭题库文档预览器并重置状态
 function closeKbDocViewer() {
   kbViewer.visible = false;
   kbViewer.docId = null;
@@ -1171,6 +1239,7 @@ function closeKbDocViewer() {
   kbViewMessage.value = "";
 }
 
+// 加载题库文档内容（分页），reset=true 时从第一页开始
 async function loadKbDocViewer(reset = false) {
   if (!kbViewer.docId) return;
   kbViewLoading.value = true;
@@ -1198,12 +1267,13 @@ async function loadKbDocViewer(reset = false) {
   }
 }
 
+// 加载更多题库内容（下一页）
 async function loadKbDocViewerMore() {
   if (!kbViewerHasMore.value) return;
   await loadKbDocViewer(false);
 }
 
-// ===== 题库三类入库动作：上传 / 爬虫 / 模型 =====
+// 上传面试文档并入库
 async function uploadKbDoc() {
   if (!kbUploadForm.file) {
     kbMessage.value = "请先选择面试文档";
@@ -1242,6 +1312,8 @@ async function uploadKbDoc() {
   }
 }
 
+// 爬虫抓取面试题并入库
+// 爬虫抓取面试题并入库
 async function crawlKbDocs() {
   if (!kbCrawlForm.seedUrl) {
     kbMessage.value = "请填写爬虫种子链接";
@@ -1284,6 +1356,7 @@ async function crawlKbDocs() {
   }
 }
 
+// 调用大模型生成面试题并入库
 async function llmImportKbDocs() {
   if (!kbLlmForm.topic) {
     kbMessage.value = "请填写知识主题";
@@ -1326,6 +1399,7 @@ async function llmImportKbDocs() {
   }
 }
 
+// 删除指定题库文档
 async function deleteKbDoc(docId) {
   kbUploadLoading.value = true;
   kbMessage.value = "";
@@ -1344,6 +1418,7 @@ async function deleteKbDoc(docId) {
   }
 }
 
+// 切换到"我的记录"标签并加载数据
 async function switchMine() {
   tab.value = "mine";
   await loadMineAnalyses();

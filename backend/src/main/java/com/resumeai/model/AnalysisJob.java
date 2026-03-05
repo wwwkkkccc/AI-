@@ -7,51 +7,68 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
+/**
+ * 简历分析任务表，记录每次简历分析的异步任务信息及执行状态
+ */
 @Entity
 @Table(name = "analysis_jobs")
 public class AnalysisJob {
+    // 任务ID（字符串类型主键）
     @Id
     @Column(name = "id", length = 64)
     private String id;
 
+    // 提交任务的用户ID
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    // 提交任务的用户名
     @Column(name = "username", nullable = false, length = 64)
     private String username;
 
+    // 上传的简历文件名
     @Column(name = "filename", length = 255)
     private String filename;
 
+    // 简历文件在服务器上的存储路径
     @Column(name = "file_path", nullable = false, length = 600)
     private String filePath;
 
+    // 目标岗位名称
     @Column(name = "target_role", length = 255)
     private String targetRole;
 
+    // 职位描述（JD）文本
     @Lob
     @Column(name = "jd_text", nullable = false, columnDefinition = "LONGTEXT")
     private String jdText;
 
+    // 任务优先级
     @Column(name = "priority_level", nullable = false)
     private Integer priorityLevel;
 
+    // 任务状态（如 pending、running、finished、failed）
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    // 分析结果JSON
     @Lob
     @Column(name = "result_json", columnDefinition = "LONGTEXT")
     private String resultJson;
 
+    // 任务失败时的错误信息
     @Column(name = "error_message", length = 1000)
     private String errorMessage;
 
+    // 任务创建时间
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    // 任务开始执行时间
     @Column(name = "started_at")
     private Instant startedAt;
 
+    // 任务完成时间
     @Column(name = "finished_at")
     private Instant finishedAt;
 

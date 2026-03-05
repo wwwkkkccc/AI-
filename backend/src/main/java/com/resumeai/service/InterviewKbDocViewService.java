@@ -12,6 +12,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 面试题库文档查看服务。
+ * 提供按文档 ID 分页查看其中面试题列表的能力。
+ */
 @Service
 public class InterviewKbDocViewService {
     private final InterviewKbDocRepository docRepository;
@@ -24,6 +28,10 @@ public class InterviewKbDocViewService {
         this.itemRepository = itemRepository;
     }
 
+    /**
+     * 分页查询指定文档下的面试题列表。
+     * 若文档不存在则抛出异常。
+     */
     @Transactional(readOnly = true)
     public InterviewKbDocQuestionsResponse listQuestions(Long docId, int page, int size) {
         InterviewKbDoc doc = docRepository.findById(docId)
@@ -31,6 +39,7 @@ public class InterviewKbDocViewService {
 
         Pageable pageable = normalizePage(page, size);
         Page<InterviewKbItem> itemPage = itemRepository.findByDocIdOrderByIdAsc(docId, pageable);
+        // 提取题目文本，过滤空值
         List<String> questions = itemPage.getContent().stream()
                 .map(InterviewKbItem::getQuestionText)
                 .map(this::clean)
@@ -48,12 +57,14 @@ public class InterviewKbDocViewService {
         return response;
     }
 
+    /** 规范化分页参数，防止越界 */
     private Pageable normalizePage(int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(200, Math.max(1, size));
         return PageRequest.of(safePage, safeSize);
     }
 
+    /** 清理字符串：null 转空串并去除首尾空白 */
     private String clean(String value) {
         return value == null ? "" : value.trim();
     }

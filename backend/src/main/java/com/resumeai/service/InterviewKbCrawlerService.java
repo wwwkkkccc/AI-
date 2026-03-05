@@ -26,53 +26,75 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 
+/**
+ * 面试题网页爬虫服务。
+ * 职责：
+ * 1) 从种子链接按深度/页数进行 BFS 抓取网页
+ * 2) 从正文与 script 标签中抽取候选面试题
+ * 3) 识别私有登录页，支持 Cookie/Authorization 定向抓取
+ * 4) 将抽取结果去重后写入题库文档
+ */
 @Service
 public class InterviewKbCrawlerService {
-    /*
-     * 爬虫服务职责:
-     * 1) 从种子链接按深度/页数抓取网页
-     * 2) 从正文与脚本中抽取候选面试题
-     * 3) 识别私有登录页，并支持 Cookie/Authorization 定向抓取
-     * 4) 将结果写入题库文档
-     */
+    // 默认最大抓取页数
     private static final int DEFAULT_MAX_PAGES = 20;
+    // 默认最大抓取深度
     private static final int DEFAULT_MAX_DEPTH = 1;
+    // 硬性最大页数上限
     private static final int HARD_MAX_PAGES = 80;
+    // 硬性最大深度上限
     private static final int HARD_MAX_DEPTH = 3;
+    // 单页抓取超时（毫秒）
     private static final int FETCH_TIMEOUT_MS = 12000;
+    // 单页最大响应体大小（2MB）
     private static final int MAX_BODY_SIZE = 2 * 1024 * 1024;
+    // 最大错误记录条数
     private static final int MAX_ERRORS = 20;
+    // 单页最大提取题目数
     private static final int MAX_QUESTIONS_PER_PAGE = 180;
+    // 最大扫描 script 块数
     private static final int MAX_SCRIPT_BLOCKS = 80;
+    // 单个 script 块最大处理字符数
     private static final int MAX_SCRIPT_CHARS = 120_000;
 
+    // 按换行或标点拆分句子的正则
     private static final Pattern SENTENCE_SPLIT = Pattern.compile("[\\n\\r]+|[。！？!?；;]+");
+    // 去除行首序号前缀的正则
     private static final Pattern PREFIX_NUMBER = Pattern.compile("^[\\s\\-\\d\\)\\(\\[\\]【】\\.、:：]+");
+    // IPv4 地址匹配正则
     private static final Pattern IPV4_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+\\.\\d+$");
+    // Unicode 转义序列匹配正则
     private static final Pattern UNICODE_ESCAPE = Pattern.compile("\\\\u([0-9a-fA-F]{4})");
 
+    // 面试题关键词线索（用于判断文本是否为面试题）
     private static final Set<String> QUESTION_CUES = Set.of(
             "what", "why", "how", "when", "explain", "describe", "compare", "difference",
             "什么", "为什么", "如何", "怎么", "区别", "原理", "流程", "场景", "设计", "优化", "排查", "解释"
     );
+    // 面试题起始词（用于判断句子是否以提问方式开头）
     private static final Set<String> QUESTION_STARTERS = Set.of(
             "请", "如何", "为什么", "什么是", "谈谈", "简述", "说明",
             "what", "why", "how", "explain", "describe", "compare"
     );
+    // 知识性句子线索词（可转化为面试题）
     private static final Set<String> KNOWLEDGE_CUES = Set.of(
             "原理", "机制", "流程", "架构", "模型", "标准", "规范", "策略", "方法", "应用", "案例", "风险", "指标",
             "principle", "architecture", "mechanism", "workflow", "standard", "strategy", "method", "practice", "risk"
     );
+    // 噪声关键词（命中则跳过该文本块）
     private static final Set<String> NOISE_CUES = Set.of(
             "登录", "注册", "首页", "联系我们", "隐私", "版权", "cookie", "privacy", "copyright", "terms"
     );
+    // 登录页特征词（用于识别需要认证的页面）
     private static final Set<String> LOGIN_CUES = Set.of(
             "login", "sign in", "passport", "登录", "扫码登录", "验证码", "feishu", "lark"
     );
+    // 需要跳过的文件扩展名（非文本资源）
     private static final Set<String> SKIP_EXTENSIONS = Set.of(
             ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".pdf", ".zip", ".rar", ".7z",
             ".tar", ".gz", ".mp3", ".mp4", ".avi", ".mov", ".apk", ".exe", ".dmg", ".iso", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"
     );
+    // 文档标题中的时间格式
     private static final DateTimeFormatter TITLE_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyyMMddHHmm", Locale.ROOT).withZone(ZoneId.of("Asia/Shanghai"));
 
@@ -82,7 +104,10 @@ public class InterviewKbCrawlerService {
         this.interviewQuestionKbService = interviewQuestionKbService;
     }
 
-    // 爬取主流程: BFS 抓取 + 提取问题 + 导入题库 + 返回统计信息
+    /**
+     * 爬取主流程：BFS 抓取网页 -> 提取面试题 -> 导入题库 -> 返回统计信息。
+     * 支持同域限制、深度/页数控制、Cookie/Authorization 认证。
+     */
     public InterviewKbCrawlResponse crawlAndImport(InterviewKbCrawlRequest req, UserAccount admin) {
         URI seedUri = parseSeedUrl(req.getSeedUrl());
         String seedUrl = normalizeUrl(seedUri.toString());
@@ -163,7 +188,10 @@ public class InterviewKbCrawlerService {
         return response;
     }
 
-    // 页面拉取: 可选注入 Cookie / Referer / Authorization 以支持私有站点
+    /**
+     * 页面拉取：可选注入 Cookie / Referer / Authorization 以支持私有站点。
+     * 若检测到登录页且未提供认证信息，则抛出异常。
+     */
     private Document fetchDocument(String url, FetchContext context) throws Exception {
         Connection connection = Jsoup.connect(url)
                 .userAgent("Mozilla/5.0 (compatible; ResumeAiBot/1.0; +https://resume-ai.local)")
@@ -194,7 +222,7 @@ public class InterviewKbCrawlerService {
         return doc;
     }
 
-    // 抽取策略: 先扫 script（处理前端渲染场景），再扫正文块元素
+    /** 抽取策略：先扫 script（处理前端渲染场景），再扫正文块元素 */
     private LinkedHashSet<String> extractQuestions(Document doc) {
         LinkedHashSet<String> out = new LinkedHashSet<>();
 
@@ -219,7 +247,7 @@ public class InterviewKbCrawlerService {
         return out;
     }
 
-    // 从 script 文本里提取候选问题，兼容 JSON 字符串与 unicode 转义
+    /** 从 script 文本里提取候选问题，兼容 JSON 字符串与 unicode 转义 */
     private void extractQuestionsFromScript(Document doc, Set<String> out) {
         int inspected = 0;
         for (Element script : doc.select("script")) {
@@ -247,7 +275,7 @@ public class InterviewKbCrawlerService {
         }
     }
 
-    // 从任意文本块中筛选“疑似问题”或“可转问题的知识句”
+    /** 从任意文本块中筛选”疑似问题”或”可转问题的知识句” */
     private void collectQuestionsFromText(String text, Set<String> out) {
         String normalizedBlock = normalizeSentence(text);
         if (normalizedBlock.length() < 6 || normalizedBlock.length() > 12000) {
@@ -276,7 +304,7 @@ public class InterviewKbCrawlerService {
         }
     }
 
-    // 链接发现: 标准化 URL、过滤非 http(s)/非允许域名/非文本资源
+    /** 链接发现：标准化 URL、过滤非 http(s)/非允许域名/非文本资源 */
     private List<String> extractNextLinks(Document doc, String rootHost, boolean sameDomainOnly) {
         LinkedHashSet<String> out = new LinkedHashSet<>();
         for (Element anchor : doc.select("a[href]")) {
@@ -310,7 +338,7 @@ public class InterviewKbCrawlerService {
         return new ArrayList<>(out);
     }
 
-    // 种子链接安全校验，防止抓取本地/内网地址
+    /** 种子链接安全校验，防止抓取本地/内网地址 */
     private URI parseSeedUrl(String seedUrl) {
         String normalized = normalizeUrl(seedUrl);
         if (normalized.isEmpty()) {
@@ -332,6 +360,7 @@ public class InterviewKbCrawlerService {
         }
     }
 
+    /** 标准化 URL：统一协议小写、去尾斜杠、去 fragment */
     private String normalizeUrl(String rawUrl) {
         String input = clean(rawUrl);
         if (input.isEmpty()) {
@@ -371,6 +400,7 @@ public class InterviewKbCrawlerService {
         }
     }
 
+    /** 判断主机是否允许抓取：排除 localhost、内网 IP、链路本地地址等 */
     private boolean isAllowedHost(String host) {
         if (host.isEmpty()) {
             return false;
@@ -419,6 +449,7 @@ public class InterviewKbCrawlerService {
         return true;
     }
 
+    /** 判断 URL 路径是否为需要跳过的非文本资源 */
     private boolean hasSkippedExtension(String path) {
         String value = clean(path).toLowerCase(Locale.ROOT);
         for (String ext : SKIP_EXTENSIONS) {
@@ -429,6 +460,7 @@ public class InterviewKbCrawlerService {
         return false;
     }
 
+    /** 判断文本是否像面试题：含问号、含面试关键词、或以提问词开头 */
     private boolean looksLikeQuestion(String text) {
         String value = clean(text);
         if (value.contains("?") || value.contains("？")) {
@@ -448,6 +480,7 @@ public class InterviewKbCrawlerService {
         return lower.endsWith("吗") || lower.endsWith("么") || lower.endsWith("呢");
     }
 
+    /** 判断文本是否为知识性句子（可转化为面试题） */
     private boolean looksLikeKnowledge(String text) {
         String value = clean(text);
         if (value.length() < 8 || value.length() > 120) {
@@ -471,6 +504,7 @@ public class InterviewKbCrawlerService {
         return false;
     }
 
+    /** 判断文本是否为噪声内容（如导航、版权等） */
     private boolean looksLikeNoise(String text) {
         String lower = clean(text).toLowerCase(Locale.ROOT);
         for (String cue : NOISE_CUES) {
@@ -481,7 +515,7 @@ public class InterviewKbCrawlerService {
         return false;
     }
 
-    // 登录页启发式判断: 关键字命中 + 页面文本体量较小
+    /** 登录页启发式判断：关键字命中 >= 2 且页面文本体量较小 */
     private boolean looksLikeLoginPage(Document doc) {
         String title = clean(doc.title()).toLowerCase(Locale.ROOT);
         String text = clean(doc.text()).toLowerCase(Locale.ROOT);
@@ -495,6 +529,7 @@ public class InterviewKbCrawlerService {
         return hits >= 2 && text.length() < 8000;
     }
 
+    /** 将知识性句子转换为面试题格式 */
     private String toQuestion(String sentence) {
         String value = sentence.replaceAll("[。！？!?；;]+$", "").trim();
         if (containsChinese(value)) {
@@ -503,6 +538,7 @@ public class InterviewKbCrawlerService {
         return "Explain " + value + " and provide one practical scenario?";
     }
 
+    /** 确保句子末尾有问号，没有则根据语言自动补充 */
     private String ensureQuestionMark(String sentence) {
         String value = sentence.replaceAll("[。！？!?；;]+$", "").trim();
         if (value.endsWith("?") || value.endsWith("？")) {
@@ -514,6 +550,7 @@ public class InterviewKbCrawlerService {
         return value + "?";
     }
 
+    /** 判断文本中是否包含中文字符 */
     private boolean containsChinese(String text) {
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
@@ -524,6 +561,7 @@ public class InterviewKbCrawlerService {
         return false;
     }
 
+    /** 规范化句子：去序号前缀、合并空白、去首尾标点 */
     private String normalizeSentence(String sentence) {
         String value = clean(sentence);
         if (value.isEmpty()) {
@@ -535,7 +573,7 @@ public class InterviewKbCrawlerService {
         return value.trim();
     }
 
-    // script 解码: 处理转义换行与 \\uXXXX，提升题目识别率
+    /** script 解码：处理转义换行与 \\uXXXX，提升题目识别率 */
     private String decodeScriptText(String text) {
         String value = clean(text)
                 .replace("\\n", " ")
@@ -559,6 +597,7 @@ public class InterviewKbCrawlerService {
         return sb.toString();
     }
 
+    /** 解析 Cookie 字符串为键值对列表 */
     private List<CookiePair> parseCookiePairs(String rawCookie) {
         String value = clean(rawCookie);
         if (value.isEmpty()) {
@@ -581,6 +620,7 @@ public class InterviewKbCrawlerService {
         return out;
     }
 
+    /** 规范化最大页数参数 */
     private int normalizeMaxPages(Integer maxPages) {
         int pages = maxPages == null ? DEFAULT_MAX_PAGES : maxPages;
         if (pages < 1) {
@@ -589,6 +629,7 @@ public class InterviewKbCrawlerService {
         return Math.min(pages, HARD_MAX_PAGES);
     }
 
+    /** 规范化最大深度参数 */
     private int normalizeMaxDepth(Integer maxDepth) {
         int depth = maxDepth == null ? DEFAULT_MAX_DEPTH : maxDepth;
         if (depth < 0) {
@@ -597,6 +638,7 @@ public class InterviewKbCrawlerService {
         return Math.min(depth, HARD_MAX_DEPTH);
     }
 
+    /** 构建题库文档标题：优先使用请求中的 title，否则自动生成 */
     private String buildTitle(InterviewKbCrawlRequest req, URI seedUri) {
         String explicitTitle = clean(req.getTitle());
         if (!explicitTitle.isEmpty()) {
@@ -608,6 +650,7 @@ public class InterviewKbCrawlerService {
         return cut(base + "-" + TITLE_TIME_FORMAT.format(Instant.now()), 255);
     }
 
+    /** 生成爬取结果的文件名 */
     private String buildFilename(URI seedUri) {
         String host = normalizeHost(seedUri.getHost()).replaceAll("[^a-z0-9.-]", "_");
         if (host.isBlank()) {
@@ -616,6 +659,7 @@ public class InterviewKbCrawlerService {
         return "crawl_" + host + "_" + Instant.now().toEpochMilli() + ".txt";
     }
 
+    /** 规范化主机名：转小写并去除 www. 前缀 */
     private String normalizeHost(String host) {
         String value = clean(host).toLowerCase(Locale.ROOT);
         if (value.startsWith("www.")) {
@@ -624,6 +668,7 @@ public class InterviewKbCrawlerService {
         return value;
     }
 
+    /** 记录错误信息，超过上限后忽略 */
     private void addError(List<String> errors, String value) {
         if (errors.size() >= MAX_ERRORS) {
             return;
@@ -634,6 +679,7 @@ public class InterviewKbCrawlerService {
         }
     }
 
+    /** 截断字符串到指定最大长度 */
     private String cut(String text, int max) {
         String value = clean(text);
         if (value.length() <= max) {
@@ -642,10 +688,12 @@ public class InterviewKbCrawlerService {
         return value.substring(0, max);
     }
 
+    /** 清理字符串：null 转空串并去除首尾空白 */
     private String clean(String value) {
         return value == null ? "" : value.trim();
     }
 
+    /** 页面抓取上下文：携带认证信息 */
     private static class FetchContext {
         private final String cookieHeader;
         private final String referer;
@@ -658,6 +706,7 @@ public class InterviewKbCrawlerService {
         }
     }
 
+    /** Cookie 键值对 */
     private static class CookiePair {
         private final String key;
         private final String value;
@@ -668,6 +717,7 @@ public class InterviewKbCrawlerService {
         }
     }
 
+    /** BFS 爬取节点：URL + 当前深度 */
     private static class CrawlNode {
         private final String url;
         private final int depth;

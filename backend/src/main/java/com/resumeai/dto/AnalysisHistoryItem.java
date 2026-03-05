@@ -2,20 +2,37 @@ package com.resumeai.dto;
 
 import java.time.Instant;
 
+/**
+ * 简历分析历史记录项 DTO，用于返回单条分析历史的详细信息
+ */
 public class AnalysisHistoryItem {
+    /** 分析记录 ID */
     private Long id;
+    /** 用户 ID */
     private Long userId;
+    /** 用户名 */
     private String username;
+    /** 上传的简历文件名 */
     private String filename;
+    /** 目标岗位 */
     private String targetRole;
+    /** 简历匹配评分 */
     private Double score;
+    /** 关键词覆盖率 */
     private Double coverage;
+    /** 优化建议摘要 */
     private String optimizedSummary;
+    /** 是否使用了 LLM 模型进行分析 */
     private Boolean modelUsed;
+    /** 简历内容预览（截断） */
     private String resumePreview;
+    /** 职位描述预览（截断） */
     private String jdPreview;
+    /** 简历完整文本 */
     private String resumeText;
+    /** 职位描述完整文本 */
     private String jdText;
+    /** 分析创建时间 */
     private Instant createdAt;
 
     public Long getId() {

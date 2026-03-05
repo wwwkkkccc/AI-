@@ -1,45 +1,55 @@
+# 服务端口配置
 server:
   port: 8080
 
 spring:
+  # ===== 数据源配置（MySQL） =====
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/resume_ai?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
-    username: ${SPRING_DATASOURCE_USERNAME:resume_ai}
-    password: ${SPRING_DATASOURCE_PASSWORD:resume_ai}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/resume_ai?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}  # 数据库连接地址
+    username: ${SPRING_DATASOURCE_USERNAME:resume_ai}    # 数据库用户名
+    password: ${SPRING_DATASOURCE_PASSWORD:resume_ai}    # 数据库密码
+    driver-class-name: com.mysql.cj.jdbc.Driver          # MySQL 驱动类
+  # ===== JPA / Hibernate 配置 =====
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: false
+      ddl-auto: update       # 自动更新表结构（生产环境建议改为 validate）
+    show-sql: false           # 不在控制台打印 SQL
     properties:
       hibernate:
-        format_sql: false
+        format_sql: false     # 不格式化 SQL 输出
         jdbc:
-          time_zone: UTC
+          time_zone: UTC      # JDBC 时区设为 UTC
+  # ===== 文件上传限制 =====
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 12MB
+      max-file-size: 5MB     # 单个文件最大 5MB
+      max-request-size: 12MB # 单次请求最大 12MB
+  # ===== Redis 配置 =====
   data:
     redis:
-      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
-      port: ${SPRING_DATA_REDIS_PORT:6379}
-      timeout: ${SPRING_DATA_REDIS_TIMEOUT:3s}
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}    # Redis 主机地址
+      port: ${SPRING_DATA_REDIS_PORT:6379}          # Redis 端口
+      timeout: ${SPRING_DATA_REDIS_TIMEOUT:3s}      # 连接超时时间
 
+# ===== 应用自定义配置 =====
 app:
+  # AI 模型调用配置（默认值，可通过管理后台动态修改）
   ai:
-    default-base-url: ${APP_AI_DEFAULT_BASE_URL:https://aicodelink.shop}
-    default-api-key: ${APP_AI_DEFAULT_API_KEY:}
-    default-model: ${APP_AI_DEFAULT_MODEL:gpt-5.3-codex}
+    default-base-url: ${APP_AI_DEFAULT_BASE_URL:https://aicodelink.shop}  # AI 接口基础地址
+    default-api-key: ${APP_AI_DEFAULT_API_KEY:}                           # AI 接口密钥
+    default-model: ${APP_AI_DEFAULT_MODEL:gpt-5.3-codex}                  # 默认模型名称
+  # 认证与权限配置
   auth:
-    timezone: ${APP_AUTH_TIMEZONE:Asia/Shanghai}
-    token-expire-hours: ${APP_AUTH_TOKEN_EXPIRE_HOURS:720}
-    max-register-per-ip-per-day: ${APP_AUTH_MAX_REGISTER_PER_IP_PER_DAY:3}
-    admin-username: ${APP_AUTH_ADMIN_USERNAME:admin}
-    admin-password: ${APP_AUTH_ADMIN_PASSWORD:Admin@123456}
+    timezone: ${APP_AUTH_TIMEZONE:Asia/Shanghai}                                    # 系统时区
+    token-expire-hours: ${APP_AUTH_TOKEN_EXPIRE_HOURS:720}                         # Token 过期时间（小时）
+    max-register-per-ip-per-day: ${APP_AUTH_MAX_REGISTER_PER_IP_PER_DAY:3}        # 每个 IP 每天最大注册次数
+    admin-username: ${APP_AUTH_ADMIN_USERNAME:admin}                                # 管理员默认用户名
+    admin-password: ${APP_AUTH_ADMIN_PASSWORD:Admin@123456}                         # 管理员默认密码
+  # 任务队列配置
   queue:
-    poll-ms: ${APP_QUEUE_POLL_MS:700}
-    upload-dir: ${APP_QUEUE_UPLOAD_DIR:/tmp/resume-ai-jobs}
+    poll-ms: ${APP_QUEUE_POLL_MS:700}                          # 队列轮询间隔（毫秒）
+    upload-dir: ${APP_QUEUE_UPLOAD_DIR:/tmp/resume-ai-jobs}    # 上传文件临时存储目录
+  # OCR 文字识别配置（Tesseract）
   ocr:
-    lang: ${APP_OCR_LANG:chi_sim+eng}
-    datapath: ${APP_OCR_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}
+    lang: ${APP_OCR_LANG:chi_sim+eng}                                          # OCR 识别语言（中文简体+英文）
+    datapath: ${APP_OCR_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}          # Tesseract 语言数据路径

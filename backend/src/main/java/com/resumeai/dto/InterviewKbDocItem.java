@@ -2,13 +2,23 @@ package com.resumeai.dto;
 
 import java.time.Instant;
 
+/**
+ * 面试知识库文档项 DTO，用于返回单个知识库文档的基本信息
+ */
 public class InterviewKbDocItem {
+    /** 文档 ID */
     private Long id;
+    /** 文档标题 */
     private String title;
+    /** 文件名 */
     private String filename;
+    /** 文档中包含的面试题数量 */
     private Integer questionCount;
+    /** 上传者用户 ID */
     private Long uploadedById;
+    /** 上传者用户名 */
     private String uploadedBy;
+    /** 文档创建时间 */
     private Instant createdAt;
 
     public Long getId() {

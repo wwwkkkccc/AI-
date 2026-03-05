@@ -39,27 +39,47 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * 面试题库核心服务。
+ * 职责：
+ * 1) 上传/导入面试题文档（支持 PDF、DOCX、TXT、MD、图片 OCR）
+ * 2) 从文本中解析、规范化面试题并持久化
+ * 3) 分页查询/删除题库文档
+ * 4) 基于关键词匹配从题库中检索与目标岗位相关的面试题
+ */
 @Service
 public class InterviewQuestionKbService {
+    // 单文件最大大小（12MB）
     private static final int MAX_FILE_SIZE = 12 * 1024 * 1024;
+    // 单文档最大题目数
     private static final int MAX_QUESTIONS_PER_DOC = 1500;
+    // 题目最小长度
     private static final int MIN_QUESTION_LENGTH = 6;
+    // 题目最大长度
     private static final int MAX_QUESTION_LENGTH = 260;
 
+    // 英文 token 匹配正则
     private static final Pattern EN_TOKEN = Pattern.compile("[a-zA-Z][a-zA-Z0-9_+.#-]{1,30}");
+    // 中文 token 匹配正则
     private static final Pattern ZH_TOKEN = Pattern.compile("[\\u4e00-\\u9fff]{2,10}");
+    // 去除行首序号前缀的正则
     private static final Pattern PREFIX_NUMBER = Pattern.compile("^[\\s\\-•·●◆◇\\d一二三四五六七八九十①②③④⑤⑥⑦⑧⑨⑩()（）【】\\[\\].、,:：]+");
+    // 按句拆分的正则
     private static final Pattern SENTENCE_SPLIT = Pattern.compile("[。！？!?;；\\n]+");
+    // 英文停用词
     private static final Set<String> EN_STOPWORDS = Set.of(
             "the", "and", "for", "with", "that", "this", "from", "your", "our", "into", "about", "what", "when"
     );
+    // 中文停用词
     private static final Set<String> ZH_STOPWORDS = Set.of(
             "我们", "你们", "这个", "那个", "一个", "请问", "如何", "什么", "为什么", "怎么", "哪些", "以及"
     );
+    // 面试题线索词（用于判断句子是否为面试题）
     private static final Set<String> QUESTION_CUES = Set.of(
             "what", "why", "how", "when", "difference", "compare", "explain", "describe", "design", "tradeoff",
             "什么", "为什么", "如何", "怎么", "区别", "原理", "流程", "场景", "设计", "优化", "排查", "介绍", "解释"
     );
+    // 面试题起始词
     private static final Set<String> QUESTION_STARTERS = Set.of(
             "请", "如何", "为什么", "什么是", "谈谈", "简述", "说明",
             "what", "why", "how", "explain", "describe", "compare"
@@ -81,6 +101,10 @@ public class InterviewQuestionKbService {
         this.ocrDatapath = clean(ocrDatapath);
     }
 
+    /**
+     * 上传面试题文档并导入题库。
+     * 支持 PDF、DOCX、TXT、MD 和图片格式（OCR 识别）。
+     */
     @Transactional
     public InterviewKbDocItem uploadDoc(MultipartFile file, String title, UserAccount admin) {
         if (file == null || file.isEmpty()) {
@@ -102,6 +126,7 @@ public class InterviewQuestionKbService {
         return importText(text, title, filename, admin);
     }
 
+    /** 从纯文本中解析面试题并导入题库 */
     @Transactional
     public InterviewKbDocItem importText(String text, String title, String filename, UserAccount admin) {
         List<String> questions = parseQuestions(text);
@@ -111,6 +136,7 @@ public class InterviewQuestionKbService {
         return saveDoc(questions, title, filename, admin);
     }
 
+    /** 从已提取的题目列表导入题库（由爬虫/LLM 服务调用） */
     @Transactional
     public InterviewKbDocItem importQuestions(List<String> questions, String title, String filename, UserAccount admin) {
         if (questions == null || questions.isEmpty()) {
@@ -129,6 +155,7 @@ public class InterviewQuestionKbService {
         return saveDoc(new ArrayList<>(normalized), title, filename, admin);
     }
 
+    /** 分页查询题库文档列表，按 ID 倒序 */
     @Transactional(readOnly = true)
     public InterviewKbDocsResponse listDocs(int page, int size) {
         Pageable pageable = normalizePage(page, size);
@@ -141,6 +168,7 @@ public class InterviewQuestionKbService {
         return response;
     }
 
+    /** 删除指定题库文档及其下所有面试题 */
     @Transactional
     public void deleteDoc(Long docId) {
         InterviewKbDoc doc = docRepository.findById(docId)
@@ -149,6 +177,10 @@ public class InterviewQuestionKbService {
         docRepository.delete(doc);
     }
 
+    /**
+     * 根据目标岗位、JD 文本和缺失关键词，从题库中检索最相关的面试题。
+     * 使用关键词重叠度 + 文本包含度进行评分排序。
+     */
     @Transactional(readOnly = true)
     public List<String> retrieveQuestions(String targetRole, String jdText, List<String> missingKeywords, int limit) {
         int safeLimit = Math.max(1, Math.min(12, limit));
@@ -228,6 +260,7 @@ public class InterviewQuestionKbService {
         return new ArrayList<>(unique);
     }
 
+    /** 保存题库文档及其面试题到数据库 */
     private InterviewKbDocItem saveDoc(List<String> questions, String title, String filename, UserAccount admin) {
         String finalFilename = safeFilename(filename);
         String finalTitle = normalizeTitle(title, finalFilename);
@@ -270,6 +303,7 @@ public class InterviewQuestionKbService {
         return toDocItem(doc);
     }
 
+    /** 将文档实体转换为列表项 DTO */
     private InterviewKbDocItem toDocItem(InterviewKbDoc doc) {
         InterviewKbDocItem item = new InterviewKbDocItem();
         item.setId(doc.getId());
@@ -282,6 +316,7 @@ public class InterviewQuestionKbService {
         return item;
     }
 
+    /** 从文本中解析面试题：先按行拆分，不够则按句拆分补充 */
     private List<String> parseQuestions(String text) {
         if (clean(text).isEmpty()) {
             return Collections.emptyList();
@@ -314,6 +349,7 @@ public class InterviewQuestionKbService {
         return new ArrayList<>(out);
     }
 
+    /** 处理单行文本：过长或含句号则按句拆分，否则直接判断是否为面试题 */
     private void addQuestionFromLine(String line, Set<String> out) {
         if (line.isEmpty()) {
             return;
@@ -332,6 +368,7 @@ public class InterviewQuestionKbService {
         }
     }
 
+    /** 按句号/问号等标点拆分文本为句子列表 */
     private List<String> splitSentences(String text) {
         return Arrays.stream(SENTENCE_SPLIT.split(normalizeText(text)))
                 .map(this::clean)
@@ -339,6 +376,7 @@ public class InterviewQuestionKbService {
                 .toList();
     }
 
+    /** 判断文本是否像面试题：含问号、含线索词、以提问词开头、或以语气词结尾 */
     private boolean looksLikeQuestion(String text) {
         String q = clean(text);
         if (q.length() < MIN_QUESTION_LENGTH || q.length() > MAX_QUESTION_LENGTH) {
@@ -361,6 +399,7 @@ public class InterviewQuestionKbService {
         return lower.endsWith("吗") || lower.endsWith("呢") || lower.endsWith("么");
     }
 
+    /** 规范化面试题文本：去序号前缀、合并空白、去首尾标点、截断过长文本 */
     private String normalizeQuestion(String text) {
         String q = clean(text);
         if (q.isEmpty()) {
@@ -375,6 +414,7 @@ public class InterviewQuestionKbService {
         return q;
     }
 
+    /** 根据文件扩展名提取文本内容 */
     private String extractFileText(byte[] data, String filename) throws IOException, TesseractException {
         String lower = clean(filename).toLowerCase(Locale.ROOT);
         if (lower.endsWith(".pdf")) {
@@ -392,6 +432,7 @@ public class InterviewQuestionKbService {
         throw new IllegalArgumentException("question doc format not supported");
     }
 
+    /** 从 PDF 文件中提取文本 */
     private String extractPdf(byte[] data) throws IOException {
         try (PDDocument document = Loader.loadPDF(data)) {
             PDFTextStripper stripper = new PDFTextStripper();
@@ -399,6 +440,7 @@ public class InterviewQuestionKbService {
         }
     }
 
+    /** 从 DOCX 文件中提取段落文本 */
     private String extractDocx(byte[] data) throws IOException {
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(data))) {
             List<String> lines = new ArrayList<>();
@@ -412,6 +454,7 @@ public class InterviewQuestionKbService {
         }
     }
 
+    /** 通过 OCR 从图片中提取文本 */
     private String extractImageText(byte[] data) throws IOException, TesseractException {
         BufferedImage image = ImageIO.read(new ByteArrayInputStream(data));
         if (image == null) {
@@ -425,6 +468,7 @@ public class InterviewQuestionKbService {
         return text;
     }
 
+    /** 构建 Tesseract OCR 实例 */
     private ITesseract buildTesseract() {
         Tesseract tesseract = new Tesseract();
         if (!ocrDatapath.isBlank()) {
@@ -435,6 +479,7 @@ public class InterviewQuestionKbService {
         return tesseract;
     }
 
+    /** 判断文件名是否为图片格式 */
     private boolean isImageFilename(String filename) {
         return filename.endsWith(".png")
                 || filename.endsWith(".jpg")
@@ -445,6 +490,7 @@ public class InterviewQuestionKbService {
                 || filename.endsWith(".tiff");
     }
 
+    /** 从文本中提取关键词 token（中英文），用于题目检索匹配 */
     private List<String> extractKeywordTokens(String text, int limit) {
         if (clean(text).isEmpty() || limit <= 0) {
             return Collections.emptyList();
@@ -470,6 +516,7 @@ public class InterviewQuestionKbService {
         return new ArrayList<>(out);
     }
 
+    /** 解析逗号分隔的关键词字符串为 Set */
     private Set<String> parseKeywords(String csv) {
         if (clean(csv).isEmpty()) {
             return Collections.emptySet();
@@ -480,6 +527,7 @@ public class InterviewQuestionKbService {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
+    /** 规范化 token：转小写并去除首尾非字母数字字符 */
     private String normalizeToken(String token) {
         String t = clean(token).toLowerCase(Locale.ROOT);
         if (t.isEmpty()) {
@@ -488,6 +536,7 @@ public class InterviewQuestionKbService {
         return t.replaceAll("^[^a-z0-9\\u4e00-\\u9fff]+|[^a-z0-9\\u4e00-\\u9fff]+$", "");
     }
 
+    /** 安全化文件名：去除非法字符、限制长度 */
     private String safeFilename(String filename) {
         String value = clean(filename);
         if (value.isEmpty()) {
@@ -500,6 +549,7 @@ public class InterviewQuestionKbService {
         return value.toLowerCase(Locale.ROOT);
     }
 
+    /** 规范化文档标题：为空时用文件名代替，超长则截断 */
     private String normalizeTitle(String title, String filename) {
         String finalTitle = clean(title);
         if (finalTitle.isEmpty()) {
@@ -511,6 +561,7 @@ public class InterviewQuestionKbService {
         return finalTitle;
     }
 
+    /** 规范化分页参数，防止越界 */
     private Pageable normalizePage(int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(100, Math.max(1, size));

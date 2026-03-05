@@ -1,72 +1,77 @@
+# Docker Compose 编排文件：定义 MySQL、Redis、后端、前端四个服务
 services:
+  # ===== MySQL 数据库服务 =====
   mysql:
     image: mysql:8.0
     container_name: resume-ai-mysql
-    restart: unless-stopped
+    restart: unless-stopped                  # 非手动停止时自动重启
     command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
+      - --character-set-server=utf8mb4       # 设置字符集为 utf8mb4（支持中文和 emoji）
+      - --collation-server=utf8mb4_unicode_ci  # 设置排序规则
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ChangeThisRootPass123!}
-      MYSQL_DATABASE: resume_ai
-      MYSQL_USER: resume_ai
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ChangeThisAppPass123!}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ChangeThisRootPass123!}  # root 密码
+      MYSQL_DATABASE: resume_ai              # 自动创建的数据库名
+      MYSQL_USER: resume_ai                  # 应用数据库用户名
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ChangeThisAppPass123!}             # 应用数据库密码
     volumes:
-      - ./data/mysql:/var/lib/mysql
-    healthcheck:
+      - ./data/mysql:/var/lib/mysql          # 数据持久化到宿主机
+    healthcheck:                             # 健康检查：确保 MySQL 就绪后再启动依赖服务
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 10s
       timeout: 5s
       retries: 12
 
+  # ===== Redis 缓存服务 =====
   redis:
     image: redis:7-alpine
     container_name: resume-ai-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes"]  # 开启 AOF 持久化
     volumes:
-      - ./data/redis:/data
-    healthcheck:
+      - ./data/redis:/data                   # 数据持久化到宿主机
+    healthcheck:                             # 健康检查：确保 Redis 就绪
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 12
 
+  # ===== 后端 Spring Boot 服务 =====
   backend:
     build:
-      context: ./backend
+      context: ./backend                     # 构建上下文为 backend 目录
     container_name: resume-ai-backend
     restart: unless-stopped
-    depends_on:
+    depends_on:                              # 依赖 MySQL 和 Redis 健康后才启动
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/resume_ai?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/resume_ai?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC  # 数据库连接（容器内网络）
       SPRING_DATASOURCE_USERNAME: resume_ai
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ChangeThisAppPass123!}
-      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_HOST: redis          # Redis 主机（容器名即主机名）
       SPRING_DATA_REDIS_PORT: 6379
-      APP_AI_DEFAULT_BASE_URL: ${APP_AI_DEFAULT_BASE_URL:-https://aicodelink.shop}
-      APP_AI_DEFAULT_API_KEY: ${APP_AI_DEFAULT_API_KEY:-}
-      APP_AI_DEFAULT_MODEL: ${APP_AI_DEFAULT_MODEL:-gpt-5.3-codex}
-      APP_AUTH_ADMIN_USERNAME: ${APP_AUTH_ADMIN_USERNAME:-admin}
-      APP_AUTH_ADMIN_PASSWORD: ${APP_AUTH_ADMIN_PASSWORD:-Admin@123456}
-      APP_AUTH_MAX_REGISTER_PER_IP_PER_DAY: 3
-      APP_QUEUE_POLL_MS: 700
-      APP_QUEUE_UPLOAD_DIR: /tmp/resume-ai-jobs
-      APP_OCR_LANG: chi_sim+eng
-      APP_OCR_DATAPATH: /usr/share/tesseract-ocr/5/tessdata
+      APP_AI_DEFAULT_BASE_URL: ${APP_AI_DEFAULT_BASE_URL:-https://aicodelink.shop}  # AI 接口地址
+      APP_AI_DEFAULT_API_KEY: ${APP_AI_DEFAULT_API_KEY:-}                            # AI 接口密钥
+      APP_AI_DEFAULT_MODEL: ${APP_AI_DEFAULT_MODEL:-gpt-5.3-codex}                  # 默认模型
+      APP_AUTH_ADMIN_USERNAME: ${APP_AUTH_ADMIN_USERNAME:-admin}                      # 管理员用户名
+      APP_AUTH_ADMIN_PASSWORD: ${APP_AUTH_ADMIN_PASSWORD:-Admin@123456}               # 管理员密码
+      APP_AUTH_MAX_REGISTER_PER_IP_PER_DAY: 3    # 每 IP 每天最大注册数
+      APP_QUEUE_POLL_MS: 700                     # 队列轮询间隔（毫秒）
+      APP_QUEUE_UPLOAD_DIR: /tmp/resume-ai-jobs  # 上传文件临时目录
+      APP_OCR_LANG: chi_sim+eng                  # OCR 语言（中文+英文）
+      APP_OCR_DATAPATH: /usr/share/tesseract-ocr/5/tessdata  # Tesseract 数据路径
     ports:
-      - "18081:8080"
+      - "18081:8080"                         # 宿主机 18081 映射到容器 8080
 
+  # ===== 前端 Nginx 服务 =====
   frontend:
     build:
-      context: ./frontend
+      context: ./frontend                    # 构建上下文为 frontend 目录
     container_name: resume-ai-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      - backend                              # 依赖后端服务（Nginx 反向代理需要后端可达）
     ports:
-      - "18180:80"
+      - "18180:80"                           # 宿主机 18180 映射到容器 80（访问入口）

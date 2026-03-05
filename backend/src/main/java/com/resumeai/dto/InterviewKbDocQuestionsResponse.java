@@ -3,13 +3,23 @@ package com.resumeai.dto;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 面试知识库文档面试题列表响应 DTO，用于分页返回指定文档中的面试题
+ */
 public class InterviewKbDocQuestionsResponse {
+    /** 文档 ID */
     private Long docId;
+    /** 文档标题 */
     private String title;
+    /** 文件名 */
     private String filename;
+    /** 面试题总数 */
     private long total;
+    /** 当前页码 */
     private int page;
+    /** 每页大小 */
     private int size;
+    /** 当前页的面试题列表 */
     private List<String> questions = new ArrayList<>();
 
     public Long getDocId() {
