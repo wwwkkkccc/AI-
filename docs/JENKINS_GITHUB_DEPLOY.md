@@ -1,9 +1,9 @@
-# Gitee + Jenkins 自动部署（上传包模式）
+# GitHub + Jenkins 自动部署（上传包模式）
 
 ## 1. 目标
-- 每次 `git push` 到 Gitee（如 `main`）后自动触发 Jenkins。
+- 每次 `git push` 到 GitHub（如 `main`）后自动触发 Jenkins。
 - Jenkins 在自己的工作区拉代码、打包、上传到服务器，然后远端执行 `docker compose up -d --build backend frontend`。
-- 部署服务器**不需要**能访问 Gitee，避免 `git clone` 超时问题。
+- 部署服务器**不需要**能访问 GitHub，避免 `git clone` 超时问题。
 
 ## 2. 流程说明
 1. Jenkins Checkout 指定分支代码。
@@ -29,7 +29,7 @@ docker compose up -d
 ## 4. Jenkins 必装插件
 - `Git`
 - `Pipeline`
-- `Gitee`（可选，用于 Push 触发；不装也可用轮询/Webhook 插件替代）
+- `GitHub`（可选，用于 Push 触发；不装也可用轮询/Webhook 插件替代）
 
 ## 5. SSH 密钥准备（无 Jenkins 凭据模式）
 `Jenkinsfile` 默认使用 `SSH_KEY_PATH=/var/jenkins_home/.ssh/id_rsa`。  
@@ -49,15 +49,15 @@ systemctl restart ssh || systemctl restart sshd
 1. New Item -> Pipeline
 2. 选择 `Pipeline script from SCM`
 3. SCM 选 `Git`
-4. Repository URL：`https://gitee.com/wangknagchi/ai-resume.git`
+4. Repository URL：`https://github.com/wwwkkkccc/AI-.git`
 5. Branch：`*/main`
 6. Script Path：`Jenkinsfile`
 
-## 7. 配置 Gitee Webhook
-1. Jenkins 任务中开启 Gitee 触发（或对应触发器）。
-2. Gitee 仓库 -> WebHooks -> 新建，选择 Push 事件。
+## 7. 配置 GitHub Webhook
+1. Jenkins 任务中开启 GitHub 触发（或对应触发器）。
+2. GitHub 仓库 -> Settings -> Webhooks -> Add webhook，选择 Push 事件。
 3. 填入 Jenkins 任务提供的 webhook 地址。
-4. 在 Gitee 点击测试，确认 Jenkins 收到触发。
+4. 在 GitHub 发送测试请求，确认 Jenkins 收到触发。
 
 ## 8. 默认部署参数
 `Jenkinsfile` 参数默认值：

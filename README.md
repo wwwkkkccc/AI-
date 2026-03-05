@@ -8,7 +8,7 @@
 - 数据库：MySQL 8
 - 队列与优先级：Redis 7
 - 部署：Docker Compose
-- CI/CD：Gitee + Jenkins + SSH 发布
+- CI/CD：GitHub + Jenkins + SSH 发布
 
 ## 目录结构
 - `frontend/`：用户端与管理端页面
@@ -46,13 +46,13 @@ curl http://127.0.0.1:18081/api/health
 - 用户名：`admin`
 - 密码：`Admin@123456`
 
-## CI/CD（Gitee -> Jenkins -> Server）
+## CI/CD（GitHub -> Jenkins -> Server）
 已内置：
 - `Jenkinsfile`
 - `scripts/ci/deploy_remote.sh`
-- `docs/JENKINS_GITEE_DEPLOY.md`
+- `docs/JENKINS_GITHUB_DEPLOY.md`
 
-部署方式为“上传包模式”：Jenkins 在本地打包并上传到服务器，不依赖服务器访问 Gitee。
+部署方式为“上传包模式”：Jenkins 在本地打包并上传到服务器，不依赖服务器访问 GitHub。
 Jenkins 默认通过 `SSH_KEY_PATH=/var/jenkins_home/.ssh/id_rsa` 免密部署，不依赖 Jenkins 凭据插件。
 
 ## 手动部署（不经过 Jenkins）

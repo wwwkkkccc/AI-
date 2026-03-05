@@ -8,7 +8,7 @@ pipeline {
   }
 
   parameters {
-    string(name: "REPO_URL", defaultValue: "https://gitee.com/wangknagchi/ai-resume.git", description: "Gitee repository URL")
+    string(name: "REPO_URL", defaultValue: "https://github.com/wwwkkkccc/AI-.git", description: "GitHub repository URL")
     string(name: "DEPLOY_BRANCH", defaultValue: "main", description: "Deploy branch")
     string(name: "DEPLOY_HOST", defaultValue: "45.207.201.227", description: "Deploy server host")
     string(name: "DEPLOY_PORT", defaultValue: "22", description: "Deploy server SSH port")
@@ -19,7 +19,7 @@ pipeline {
   stages {
     stage("Checkout") {
       steps {
-        // Checkout source from Gitee in Jenkins workspace
+        // Checkout source from GitHub in Jenkins workspace
         checkout([
           $class: "GitSCM",
           branches: [[name: "*/${params.DEPLOY_BRANCH}"]],
