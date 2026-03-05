@@ -1,0 +1,72 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: resume-ai-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ChangeThisRootPass123!}
+      MYSQL_DATABASE: resume_ai
+      MYSQL_USER: resume_ai
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ChangeThisAppPass123!}
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: resume-ai-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend
+    container_name: resume-ai-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/resume_ai?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: resume_ai
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ChangeThisAppPass123!}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      APP_AI_DEFAULT_BASE_URL: ${APP_AI_DEFAULT_BASE_URL:-https://aicodelink.shop}
+      APP_AI_DEFAULT_API_KEY: ${APP_AI_DEFAULT_API_KEY:-}
+      APP_AI_DEFAULT_MODEL: ${APP_AI_DEFAULT_MODEL:-gpt-5.3-codex}
+      APP_AUTH_ADMIN_USERNAME: ${APP_AUTH_ADMIN_USERNAME:-admin}
+      APP_AUTH_ADMIN_PASSWORD: ${APP_AUTH_ADMIN_PASSWORD:-Admin@123456}
+      APP_AUTH_MAX_REGISTER_PER_IP_PER_DAY: 3
+      APP_QUEUE_POLL_MS: 700
+      APP_QUEUE_UPLOAD_DIR: /tmp/resume-ai-jobs
+      APP_OCR_LANG: chi_sim+eng
+      APP_OCR_DATAPATH: /usr/share/tesseract-ocr/5/tessdata
+    ports:
+      - "18081:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: resume-ai-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "18180:80"

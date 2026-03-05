@@ -1,0 +1,45 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/resume_ai?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:resume_ai}
+    password: ${SPRING_DATASOURCE_PASSWORD:resume_ai}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 12MB
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: ${SPRING_DATA_REDIS_TIMEOUT:3s}
+
+app:
+  ai:
+    default-base-url: ${APP_AI_DEFAULT_BASE_URL:https://aicodelink.shop}
+    default-api-key: ${APP_AI_DEFAULT_API_KEY:}
+    default-model: ${APP_AI_DEFAULT_MODEL:gpt-5.3-codex}
+  auth:
+    timezone: ${APP_AUTH_TIMEZONE:Asia/Shanghai}
+    token-expire-hours: ${APP_AUTH_TOKEN_EXPIRE_HOURS:720}
+    max-register-per-ip-per-day: ${APP_AUTH_MAX_REGISTER_PER_IP_PER_DAY:3}
+    admin-username: ${APP_AUTH_ADMIN_USERNAME:admin}
+    admin-password: ${APP_AUTH_ADMIN_PASSWORD:Admin@123456}
+  queue:
+    poll-ms: ${APP_QUEUE_POLL_MS:700}
+    upload-dir: ${APP_QUEUE_UPLOAD_DIR:/tmp/resume-ai-jobs}
+  ocr:
+    lang: ${APP_OCR_LANG:chi_sim+eng}
+    datapath: ${APP_OCR_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}
