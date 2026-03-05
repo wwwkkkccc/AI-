@@ -98,250 +98,63 @@
           <section v-if="tab === 'analyze'" class="card">
         <h2>简历分析</h2>
 
-        <div class="sub-card">
-          <h3>AI 简历一键生成/重写</h3>
-          <form @submit.prevent="generateResumeFromJd">
-            <label>目标岗位</label>
-            <input v-model.trim="resumeGenForm.targetRole" type="text" placeholder="例如：高级后端工程师" />
+        <ResumeGeneratorGroup
+          :form="resumeGenForm"
+          :loading="resumeGenLoading"
+          :message="resumeGenMessage"
+          :generated-resume="generatedResume"
+          :can-rewrite="!!result?.analysisId"
+          @submit-generate="generateResumeFromJd"
+          @rewrite="rewriteResumeFromCurrentAnalysis"
+          @copy="copyGeneratedResume"
+          @download="downloadGeneratedResume"
+        />
 
-            <label>岗位描述（JD）</label>
-            <textarea v-model.trim="resumeGenForm.jdText" rows="6" placeholder="粘贴岗位 JD，用于生成定制化简历" />
+        <AnalyzeSubmissionGroup
+          :form="analyzeForm"
+          :loading="analyzeLoading"
+          :message="analyzeMessage"
+          :queue-job="queueJob"
+          :status-text="statusText"
+          :status-class="statusClass"
+          @submit-analyze="submitAnalyze"
+          @file-change="onFileChange"
+          @jd-image-change="onJdImageChange"
+          @refresh-job="refreshCurrentJob"
+        />
 
-            <label>个人背景（可选）</label>
-            <textarea v-model.trim="resumeGenForm.userBackground" rows="4" placeholder="可补充教育、项目、擅长方向等背景信息" />
-
-            <div class="inline">
-              <button :disabled="resumeGenLoading">{{ resumeGenLoading ? "生成中..." : "从 JD 一键生成" }}</button>
-              <button
-                type="button"
-                class="mini-btn neutral"
-                :disabled="resumeGenLoading || !result?.analysisId"
-                @click="rewriteResumeFromCurrentAnalysis"
-              >
-                基于当前分析重写
-              </button>
-              <button
-                type="button"
-                class="mini-btn neutral"
-                :disabled="!generatedResume.markdown"
-                @click="copyGeneratedResume"
-              >
-                复制 Markdown
-              </button>
-              <button
-                type="button"
-                class="mini-btn neutral"
-                :disabled="!generatedResume.markdown"
-                @click="downloadGeneratedResume"
-              >
-                导出 .md
-              </button>
-            </div>
-          </form>
-          <p class="message">{{ resumeGenMessage }}</p>
-          <pre v-if="generatedResume.markdown" class="md-preview">{{ generatedResume.markdown }}</pre>
-        </div>
-
-        <!-- 简历分析表单：上传文件、填写岗位和JD -->
-        <form @submit.prevent="submitAnalyze">
-          <label>目标岗位</label>
-          <input v-model.trim="analyzeForm.targetRole" type="text" placeholder="例如：后端开发工程师" />
-
-          <label>简历文件（pdf/docx/txt）</label>
-          <input type="file" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff" @change="onFileChange" required />
-
-          <label>岗位描述（JD，可直接粘贴）</label>
-          <textarea v-model.trim="analyzeForm.jdText" rows="8" placeholder="可粘贴JD文本；如果无法复制，可上传JD截图" />
-
-          <label>岗位JD图片（可选，支持 png/jpg/jpeg/webp）</label>
-          <input type="file" accept=".png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff" @change="onJdImageChange" />
-
-          <button :disabled="analyzeLoading">{{ analyzeLoading ? '提交中...' : '提交分析任务' }}</button>
-        </form>
-        <p class="message">{{ analyzeMessage }}</p>
-
-        <!-- 任务排队状态面板 -->
-        <div v-if="queueJob.jobId" class="queue-panel">
-          <h3>当前任务</h3>
-          <div class="queue-grid">
-            <div>
-              <span>任务ID</span>
-              <strong>{{ queueJob.jobId }}</strong>
-            </div>
-            <div>
-              <span>状态</span>
-              <strong :class="statusClass(queueJob.status)">{{ statusText(queueJob.status) }}</strong>
-            </div>
-            <div>
-              <span>排队位置</span>
-              <strong>{{ queueJob.queuePosition ?? '-' }}</strong>
-            </div>
-            <div>
-              <span>优先级</span>
-              <strong>{{ queueJob.vipPriority ? 'VIP优先' : '普通队列' }}</strong>
-            </div>
-          </div>
-          <button class="mini-btn" @click="refreshCurrentJob" :disabled="!queueJob.jobId">手动刷新状态</button>
-        </div>
-
-        <!-- 分析结果展示区：评分、关键词、优化建议、面试问题 -->
         <div v-if="result" class="result">
-          <div class="metrics">
-            <div><span>匹配评分</span><strong>{{ result.score }}</strong></div>
-            <div><span>关键词覆盖率</span><strong>{{ result.coverage }}%</strong></div>
-          </div>
-          <h3>已匹配关键词</h3>
-          <p>{{ (result.matchedKeywords || []).join(', ') || '-' }}</p>
-          <h3>缺失关键词</h3>
-          <p>{{ (result.missingKeywords || []).join(', ') || '-' }}</p>
-          <h3>优化摘要</h3>
-          <p>{{ result.optimized?.summary || '-' }}</p>
-          <h3>重写经历（STAR）</h3>
-          <ul>
-            <li v-for="(line, idx) in result.optimized?.rewrittenExperience || []" :key="`star-${idx}`">{{ line }}</li>
-          </ul>
-          <h3>可能面试问题</h3>
-          <ul>
-            <li v-for="(q, idx) in result.optimized?.interviewQuestions || []" :key="idx">{{ q }}</li>
-          </ul>
+          <AnalysisResultSummaryGroup
+            :result="result"
+            @copy-resume="copyText(result.optimizedResumeMarkdown)"
+            @download-resume="downloadText('optimized-resume.md', result.optimizedResumeMarkdown)"
+          />
 
-          <div class="sub-card">
-            <h3>完整简历导出（当前分析自动生成）</h3>
-            <div class="inline">
-              <button
-                type="button"
-                class="mini-btn neutral"
-                :disabled="!result.optimizedResumeMarkdown"
-                @click="copyText(result.optimizedResumeMarkdown)"
-              >
-                复制
-              </button>
-              <button
-                type="button"
-                class="mini-btn neutral"
-                :disabled="!result.optimizedResumeMarkdown"
-                @click="downloadText('optimized-resume.md', result.optimizedResumeMarkdown)"
-              >
-                导出 .md
-              </button>
-            </div>
-            <pre v-if="result.optimizedResumeMarkdown" class="md-preview">{{ result.optimizedResumeMarkdown }}</pre>
-          </div>
+          <ResumeChatGroup
+            :chat-state="chatState"
+            :loading="chatLoading"
+            :message="chatMessage"
+            :can-start="!!result.analysisId"
+            @start="startResumeChat"
+            @send="sendChatMessage"
+            @quick-ask="quickAsk"
+          />
 
-          <div class="sub-card">
-            <h3>多轮对话式简历优化助手</h3>
-            <div class="inline">
-              <button
-                type="button"
-                :disabled="chatLoading || !result.analysisId"
-                @click="startResumeChat"
-              >
-                {{ chatState.sessionId ? "重新开启会话" : "开启会话" }}
-              </button>
-              <button
-                type="button"
-                class="mini-btn neutral"
-                :disabled="chatLoading || !chatState.sessionId"
-                @click="quickAsk('这条经历具体怎么改成 STAR？')"
-              >
-                快捷追问
-              </button>
-            </div>
-            <p class="message">{{ chatMessage }}</p>
-            <div v-if="chatState.sessionId" class="chat-panel">
-              <div class="chat-list">
-                <div
-                  v-for="msg in chatState.messages"
-                  :key="`chat-${msg.id}`"
-                  class="chat-item"
-                  :class="msg.role === 'USER' ? 'chat-user' : 'chat-ai'"
-                >
-                  <strong>{{ msg.role === "USER" ? "我" : "AI" }}</strong>
-                  <p>{{ msg.content }}</p>
-                </div>
-              </div>
-              <form class="chat-form" @submit.prevent="sendChatMessage">
-                <input
-                  v-model.trim="chatState.input"
-                  type="text"
-                  placeholder="例如：这段项目如何写成带量化结果的 STAR？"
-                />
-                <button :disabled="chatLoading || !chatState.input">
-                  {{ chatLoading ? "发送中..." : "发送" }}
-                </button>
-              </form>
-            </div>
-          </div>
+          <JdRadarGroup
+            :loading="radarLoading"
+            :message="radarMessage"
+            :data="jdRadar"
+            :can-run="!!result.analysisId"
+            @run="runJdRadarFromCurrent"
+          />
 
-          <div class="sub-card">
-            <h3>JD 智能解析与岗位匹配度雷达图</h3>
-            <button
-              type="button"
-              :disabled="radarLoading || !result.analysisId"
-              @click="runJdRadarFromCurrent"
-            >
-              {{ radarLoading ? "解析中..." : "生成雷达图" }}
-            </button>
-            <p class="message">{{ radarMessage }}</p>
-            <div v-if="jdRadar" class="radar-wrap">
-              <svg viewBox="0 0 320 320" class="radar-svg">
-                <polygon :points="radarMaxPolygon(jdRadar.dimensions || [])" class="radar-max" />
-                <polygon :points="radarValuePolygon(jdRadar.dimensions || [])" class="radar-value" />
-                <line
-                  v-for="(d, idx) in jdRadar.dimensions || []"
-                  :key="`axis-${idx}`"
-                  x1="160"
-                  y1="160"
-                  :x2="radarAxisX(idx, (jdRadar.dimensions || []).length)"
-                  :y2="radarAxisY(idx, (jdRadar.dimensions || []).length)"
-                  class="radar-axis"
-                />
-                <text
-                  v-for="(d, idx) in jdRadar.dimensions || []"
-                  :key="`label-${idx}`"
-                  :x="radarLabelX(idx, (jdRadar.dimensions || []).length)"
-                  :y="radarLabelY(idx, (jdRadar.dimensions || []).length)"
-                  class="radar-label"
-                >
-                  {{ d.name }}
-                </text>
-              </svg>
-              <div class="radar-detail">
-                <p class="message">综合匹配度：{{ formatScore(jdRadar.overallScore) }}</p>
-                <ul>
-                  <li v-for="(d, idx) in jdRadar.dimensions || []" :key="`dim-${idx}`">
-                    {{ d.name }}：{{ formatScore(d.score) }} / {{ formatScore(d.maxScore) }}，{{ d.detail }}
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div class="sub-card">
-            <h3>简历内容真实性/夸大检测</h3>
-            <button
-              type="button"
-              :disabled="auditLoading || !result.analysisId"
-              @click="runAuditFromCurrent"
-            >
-              {{ auditLoading ? "检测中..." : "开始检测" }}
-            </button>
-            <p class="message">{{ auditMessage }}</p>
-            <div v-if="resumeAudit">
-              <div class="inline">
-                <span class="state-pill" :class="auditLevelClass(resumeAudit.riskLevel)">
-                  风险等级：{{ resumeAudit.riskLevel }}
-                </span>
-                <span class="state-pill state-no">风险分：{{ formatScore(resumeAudit.riskScore) }}</span>
-              </div>
-              <p>{{ resumeAudit.summary }}</p>
-              <ul>
-                <li v-for="(item, idx) in resumeAudit.auditItems || []" :key="`audit-${idx}`">
-                  [{{ item.severity }}] {{ item.category }} - {{ item.description }}；建议：{{ item.suggestion }}
-                </li>
-              </ul>
-            </div>
-          </div>
+          <ResumeAuditGroup
+            :loading="auditLoading"
+            :message="auditMessage"
+            :data="resumeAudit"
+            :can-run="!!result.analysisId"
+            @run="runAuditFromCurrent"
+          />
         </div>
       </section>
 
@@ -713,6 +526,12 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import AnalyzeSubmissionGroup from "./components/analyze/AnalyzeSubmissionGroup.vue";
+import AnalysisResultSummaryGroup from "./components/analyze/AnalysisResultSummaryGroup.vue";
+import JdRadarGroup from "./components/analyze/JdRadarGroup.vue";
+import ResumeAuditGroup from "./components/analyze/ResumeAuditGroup.vue";
+import ResumeChatGroup from "./components/analyze/ResumeChatGroup.vue";
+import ResumeGeneratorGroup from "./components/analyze/ResumeGeneratorGroup.vue";
 
 // ===== 基础配置 =====
 const apiBase = "./api";           // API 请求基础路径（相对路径，由 Nginx 代理到后端）
@@ -1014,57 +833,6 @@ function tabTitle(tabKey) {
     adminKb: "面试题库"
   };
   return map[tabKey] || "工作台";
-}
-
-function auditLevelClass(level) {
-  const v = String(level || "").toUpperCase();
-  if (v === "HIGH") return "audit-high";
-  if (v === "MEDIUM") return "audit-mid";
-  return "audit-low";
-}
-
-function radarPolygon(scores, count, radius = 110, cx = 160, cy = 160) {
-  if (!count) return "";
-  const points = [];
-  for (let i = 0; i < count; i += 1) {
-    const angle = (Math.PI * 2 * i) / count - Math.PI / 2;
-    const score = Math.max(0, Math.min(100, asNumber(scores[i])));
-    const r = (radius * score) / 100;
-    const x = cx + Math.cos(angle) * r;
-    const y = cy + Math.sin(angle) * r;
-    points.push(`${x},${y}`);
-  }
-  return points.join(" ");
-}
-
-function radarMaxPolygon(dimensions) {
-  const count = (dimensions || []).length;
-  return radarPolygon(new Array(count).fill(100), count);
-}
-
-function radarValuePolygon(dimensions) {
-  const rows = dimensions || [];
-  return radarPolygon(rows.map((d) => d?.score ?? 0), rows.length);
-}
-
-function radarAxisX(idx, count, radius = 110, cx = 160) {
-  const angle = (Math.PI * 2 * idx) / Math.max(1, count) - Math.PI / 2;
-  return cx + Math.cos(angle) * radius;
-}
-
-function radarAxisY(idx, count, radius = 110, cy = 160) {
-  const angle = (Math.PI * 2 * idx) / Math.max(1, count) - Math.PI / 2;
-  return cy + Math.sin(angle) * radius;
-}
-
-function radarLabelX(idx, count, radius = 130, cx = 160) {
-  const angle = (Math.PI * 2 * idx) / Math.max(1, count) - Math.PI / 2;
-  return cx + Math.cos(angle) * radius;
-}
-
-function radarLabelY(idx, count, radius = 130, cy = 160) {
-  const angle = (Math.PI * 2 * idx) / Math.max(1, count) - Math.PI / 2;
-  return cy + Math.sin(angle) * radius;
 }
 
 async function copyText(text) {
