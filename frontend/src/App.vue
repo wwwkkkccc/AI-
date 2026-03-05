@@ -98,7 +98,16 @@
           <section v-if="tab === 'analyze'" class="card">
         <h2>简历分析</h2>
 
+        <div class="analyze-subtabs">
+          <button :class="{ active: analyzeSubtab === 'analysis' }" @click="analyzeSubtab = 'analysis'">基础分析</button>
+          <button :class="{ active: analyzeSubtab === 'generate' }" @click="analyzeSubtab = 'generate'">生成/重写</button>
+          <button :class="{ active: analyzeSubtab === 'chat' }" @click="analyzeSubtab = 'chat'">优化对话</button>
+          <button :class="{ active: analyzeSubtab === 'radar' }" @click="analyzeSubtab = 'radar'">JD雷达图</button>
+          <button :class="{ active: analyzeSubtab === 'audit' }" @click="analyzeSubtab = 'audit'">真实性检测</button>
+        </div>
+
         <ResumeGeneratorGroup
+          v-if="analyzeSubtab === 'generate'"
           :form="resumeGenForm"
           :loading="resumeGenLoading"
           :message="resumeGenMessage"
@@ -110,27 +119,32 @@
           @download="downloadGeneratedResume"
         />
 
-        <AnalyzeSubmissionGroup
-          :form="analyzeForm"
-          :loading="analyzeLoading"
-          :message="analyzeMessage"
-          :queue-job="queueJob"
-          :status-text="statusText"
-          :status-class="statusClass"
-          @submit-analyze="submitAnalyze"
-          @file-change="onFileChange"
-          @jd-image-change="onJdImageChange"
-          @refresh-job="refreshCurrentJob"
-        />
-
-        <div v-if="result" class="result">
-          <AnalysisResultSummaryGroup
-            :result="result"
-            @copy-resume="copyText(result.optimizedResumeMarkdown)"
-            @download-resume="downloadText('optimized-resume.md', result.optimizedResumeMarkdown)"
+        <template v-if="analyzeSubtab === 'analysis'">
+          <AnalyzeSubmissionGroup
+            :form="analyzeForm"
+            :loading="analyzeLoading"
+            :message="analyzeMessage"
+            :queue-job="queueJob"
+            :status-text="statusText"
+            :status-class="statusClass"
+            @submit-analyze="submitAnalyze"
+            @file-change="onFileChange"
+            @jd-image-change="onJdImageChange"
+            @refresh-job="refreshCurrentJob"
           />
 
+          <div v-if="result" class="result">
+            <AnalysisResultSummaryGroup
+              :result="result"
+              @copy-resume="copyText(result.optimizedResumeMarkdown)"
+              @download-resume="downloadText('optimized-resume.md', result.optimizedResumeMarkdown)"
+            />
+          </div>
+        </template>
+
+        <div v-if="result" class="result">
           <ResumeChatGroup
+            v-if="analyzeSubtab === 'chat'"
             :chat-state="chatState"
             :loading="chatLoading"
             :message="chatMessage"
@@ -141,6 +155,7 @@
           />
 
           <JdRadarGroup
+            v-if="analyzeSubtab === 'radar'"
             :loading="radarLoading"
             :message="radarMessage"
             :data="jdRadar"
@@ -149,6 +164,7 @@
           />
 
           <ResumeAuditGroup
+            v-if="analyzeSubtab === 'audit'"
             :loading="auditLoading"
             :message="auditMessage"
             :data="resumeAudit"
@@ -156,6 +172,10 @@
             @run="runAuditFromCurrent"
           />
         </div>
+
+        <p v-if="analyzeSubtab !== 'analysis' && !result" class="message">
+          请先在“基础分析”里完成一次简历分析，再使用当前功能。
+        </p>
       </section>
 
       <!-- ===== 我的简历记录标签页 ===== -->
@@ -553,6 +573,7 @@ const registerForm = reactive({ username: "", password: "" }); // 注册表单�
 const analyzeLoading = ref(false); // 分析任务提交加载状态
 const analyzeMessage = ref("");    // 分析页提示消息
 const result = ref(null);          // 分析结果数据
+const analyzeSubtab = ref("analysis");
 const analyzeForm = reactive({     // 分析表单数据
   targetRole: "",                  // 目标岗位
   jdText: "",                      // 岗位描述文本
@@ -1090,6 +1111,7 @@ async function pollJobStatus(jobId) {
     if (queueJob.status === "DONE") {
       stopPolling();
       result.value = statusData.result || null;
+      analyzeSubtab.value = "analysis";
       analyzeMessage.value = `分析完成，记录ID：${statusData.result?.analysisId || '-'} `;
       await loadMineAnalyses();
       return;

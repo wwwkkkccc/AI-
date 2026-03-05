@@ -375,6 +375,28 @@ body::after {
   margin-top: 0;
 }
 
+.analyze-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.analyze-subtabs button {
+  border: 1px solid #c9d3e1;
+  border-radius: 999px;
+  background: #edf3fa;
+  color: #495568;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.analyze-subtabs button.active {
+  border-color: #4c5a6d;
+  background: linear-gradient(135deg, #4f5968, #697486);
+  color: #f3f7fb;
+}
+
 form {
   display: flex;
   flex-direction: column;
