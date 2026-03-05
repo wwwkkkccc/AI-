@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Usage:
 # DEPLOY_HOST=45.207.201.227 DEPLOY_USER=root DEPLOY_PATH=/opt/resume-ai-stack ./scripts/ci/deploy_remote.sh
+# SSH_KEY_PATH=/path/to/id_rsa DEPLOY_HOST=45.207.201.227 ./scripts/ci/deploy_remote.sh
 
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 DEPLOY_HOST="${DEPLOY_HOST:-45.207.201.227}"
@@ -10,11 +11,25 @@ DEPLOY_PORT="${DEPLOY_PORT:-22}"
 DEPLOY_USER="${DEPLOY_USER:-root}"
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/resume-ai-stack}"
 PACKAGE_TAG="${PACKAGE_TAG:-local}"
+SSH_KEY_PATH="${SSH_KEY_PATH:-}"
 
 if [ -z "${DEPLOY_PATH}" ] || [ "${DEPLOY_PATH}" = "/" ]; then
   echo "[deploy] invalid DEPLOY_PATH: '${DEPLOY_PATH}'"
   exit 1
 fi
+
+if [ -n "${SSH_KEY_PATH}" ] && [ ! -f "${SSH_KEY_PATH}" ]; then
+  echo "[deploy] SSH_KEY_PATH not found: '${SSH_KEY_PATH}'"
+  exit 1
+fi
+
+SSH_COMMON_OPTS=(-o StrictHostKeyChecking=no)
+if [ -n "${SSH_KEY_PATH}" ]; then
+  SSH_COMMON_OPTS+=(-i "${SSH_KEY_PATH}")
+fi
+
+SCP_CMD=(scp "${SSH_COMMON_OPTS[@]}" -P "${DEPLOY_PORT}")
+SSH_CMD=(ssh "${SSH_COMMON_OPTS[@]}" -p "${DEPLOY_PORT}")
 
 LOCAL_PACKAGE="$(mktemp -u "/tmp/resume-ai-${PACKAGE_TAG}-XXXXXX.tar.gz")"
 REMOTE_PACKAGE="/tmp/$(basename "${LOCAL_PACKAGE}")"
@@ -38,10 +53,10 @@ tar \
   -czf "${LOCAL_PACKAGE}" .
 
 echo "[deploy] upload package -> ${DEPLOY_HOST}:${REMOTE_PACKAGE}"
-scp -o StrictHostKeyChecking=no -P "${DEPLOY_PORT}" "${LOCAL_PACKAGE}" "${DEPLOY_USER}@${DEPLOY_HOST}:${REMOTE_PACKAGE}"
+"${SCP_CMD[@]}" "${LOCAL_PACKAGE}" "${DEPLOY_USER}@${DEPLOY_HOST}:${REMOTE_PACKAGE}"
 
 echo "[deploy] execute remote deploy"
-ssh -o StrictHostKeyChecking=no -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" <<EOF
+"${SSH_CMD[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" <<EOF
 set -euo pipefail
 
 DEPLOY_PATH='${DEPLOY_PATH}'

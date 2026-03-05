@@ -16,11 +16,6 @@ pipeline {
     string(name: "DEPLOY_PATH", defaultValue: "/opt/resume-ai-stack", description: "Deploy directory on server")
   }
 
-  environment {
-    // SSH private key credential ID in Jenkins Credentials
-    SSH_CREDENTIALS_ID = "resume-ai-server-ssh"
-  }
-
   stages {
     stage("Checkout") {
       steps {
@@ -41,21 +36,20 @@ pipeline {
 
     stage("Deploy To Server") {
       steps {
-        sshagent(credentials: ["${env.SSH_CREDENTIALS_ID}"]) {
-          sh """
-            set -euo pipefail
-            chmod +x scripts/ci/deploy_remote.sh
+        sh """
+          set -euo pipefail
+          chmod +x scripts/ci/deploy_remote.sh
 
-            # Package workspace, upload to server, then docker compose deploy remotely
-            DEPLOY_HOST='${params.DEPLOY_HOST}' \
-            DEPLOY_PORT='${params.DEPLOY_PORT}' \
-            DEPLOY_USER='${params.DEPLOY_USER}' \
-            DEPLOY_PATH='${params.DEPLOY_PATH}' \
-            DEPLOY_BRANCH='${params.DEPLOY_BRANCH}' \
-            PACKAGE_TAG='jenkins-${BUILD_NUMBER}' \
-            ./scripts/ci/deploy_remote.sh
-          """
-        }
+          # Package workspace, upload to server, then docker compose deploy remotely
+          DEPLOY_HOST='${params.DEPLOY_HOST}' \
+          DEPLOY_PORT='${params.DEPLOY_PORT}' \
+          DEPLOY_USER='${params.DEPLOY_USER}' \
+          DEPLOY_PATH='${params.DEPLOY_PATH}' \
+          DEPLOY_BRANCH='${params.DEPLOY_BRANCH}' \
+          PACKAGE_TAG='jenkins-${BUILD_NUMBER}' \
+          SSH_KEY_PATH='/var/jenkins_home/.ssh/id_rsa' \
+          ./scripts/ci/deploy_remote.sh
+        """
       }
     }
   }

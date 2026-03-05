@@ -29,15 +29,21 @@ docker compose up -d
 ## 4. Jenkins 必装插件
 - `Git`
 - `Pipeline`
-- `SSH Agent`
 - `Gitee`（可选，用于 Push 触发；不装也可用轮询/Webhook 插件替代）
 
-## 5. Jenkins 凭据
-在 Jenkins -> `Manage Credentials` 新建：
-- 类型：`SSH Username with private key`
-- ID：`resume-ai-server-ssh`（需与 `Jenkinsfile` 一致）
-- 用户：部署服务器 SSH 用户（示例 `root`）
-- 私钥：可登录部署服务器的私钥
+## 5. SSH 密钥准备（无 Jenkins 凭据模式）
+`Jenkinsfile` 默认使用 `SSH_KEY_PATH=/var/jenkins_home/.ssh/id_rsa`。  
+先在部署服务器执行：
+
+```bash
+mkdir -p /opt/jenkins-stack/jenkins_home/.ssh /root/.ssh
+chmod 700 /opt/jenkins-stack/jenkins_home/.ssh /root/.ssh
+ssh-keygen -t rsa -b 4096 -N "" -f /opt/jenkins-stack/jenkins_home/.ssh/id_rsa
+cat /opt/jenkins-stack/jenkins_home/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+sed -i 's/^PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+systemctl restart ssh || systemctl restart sshd
+```
 
 ## 6. 新建 Pipeline 任务
 1. New Item -> Pipeline

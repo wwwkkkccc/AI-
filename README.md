@@ -53,6 +53,7 @@ curl http://127.0.0.1:18081/api/health
 - `docs/JENKINS_GITEE_DEPLOY.md`
 
 部署方式为“上传包模式”：Jenkins 在本地打包并上传到服务器，不依赖服务器访问 Gitee。
+Jenkins 默认通过 `SSH_KEY_PATH=/var/jenkins_home/.ssh/id_rsa` 免密部署，不依赖 Jenkins 凭据插件。
 
 ## 手动部署（不经过 Jenkins）
 在项目根目录执行：
