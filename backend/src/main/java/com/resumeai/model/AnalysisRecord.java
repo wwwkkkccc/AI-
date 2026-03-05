@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -13,7 +14,14 @@ import java.time.Instant;
  * 简历分析结果记录表，保存每次分析完成后的评分、覆盖率等详细结果
  */
 @Entity
-@Table(name = "analysis_records")
+@Table(
+        name = "analysis_records",
+        indexes = {
+                @Index(name = "idx_analysis_records_user_id_id", columnList = "user_id,id"),
+                @Index(name = "idx_analysis_records_created_at", columnList = "created_at"),
+                @Index(name = "idx_analysis_records_username", columnList = "username")
+        }
+)
 public class AnalysisRecord {
     // 自增主键ID
     @Id

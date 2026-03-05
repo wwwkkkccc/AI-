@@ -5,11 +5,17 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
 @Entity
-@Table(name = "chat_message")
+@Table(
+        name = "chat_message",
+        indexes = {
+                @Index(name = "idx_chat_message_session_id_id", columnList = "session_id,id")
+        }
+)
 public class ChatMessage {
 
     @Id

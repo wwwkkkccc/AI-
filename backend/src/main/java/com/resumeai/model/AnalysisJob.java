@@ -3,6 +3,7 @@ package com.resumeai.model;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -11,7 +12,13 @@ import java.time.Instant;
  * 简历分析任务表，记录每次简历分析的异步任务信息及执行状态
  */
 @Entity
-@Table(name = "analysis_jobs")
+@Table(
+        name = "analysis_jobs",
+        indexes = {
+                @Index(name = "idx_analysis_jobs_status_created", columnList = "status,created_at"),
+                @Index(name = "idx_analysis_jobs_user_id", columnList = "user_id")
+        }
+)
 public class AnalysisJob {
     // 任务ID（字符串类型主键）
     @Id

@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 简历分析历史记录服务。
- * 提供普通用户查看自己的分析记录，以及管理员查看/搜索全部记录的能力。
  */
 @Service
 public class HistoryService {
@@ -23,18 +22,13 @@ public class HistoryService {
         this.analysisRecordRepository = analysisRecordRepository;
     }
 
-    /** 分页查询当前用户自己的分析历史，按 ID 倒序 */
     @Transactional(readOnly = true)
     public AnalysisHistoryResponse listMine(Long userId, int page, int size) {
         Pageable pageable = normalizePage(page, size);
         Page<AnalysisRecord> result = analysisRecordRepository.findByUserIdOrderByIdDesc(userId, pageable);
-        return toResponse(result, pageable);
+        return toResponse(result, pageable, false);
     }
 
-    /**
-     * 管理员分页查询所有用户的分析历史。
-     * 支持按用户名模糊搜索，传 null 或空串则不过滤。
-     */
     @Transactional(readOnly = true)
     public AnalysisHistoryResponse listAllForAdmin(String usernameLike, int page, int size) {
         Pageable pageable = normalizePage(page, size);
@@ -44,12 +38,14 @@ public class HistoryService {
         } else {
             result = analysisRecordRepository.findByUsernameContainingIgnoreCaseOrderByIdDesc(usernameLike.trim(), pageable);
         }
-        return toResponse(result, pageable);
+        return toResponse(result, pageable, true);
     }
 
-    /** 将分页查询结果转换为响应 DTO */
-    private AnalysisHistoryResponse toResponse(Page<AnalysisRecord> pageResult, Pageable pageable) {
-        List<AnalysisHistoryItem> items = pageResult.getContent().stream().map(this::toItem).toList();
+    private AnalysisHistoryResponse toResponse(Page<AnalysisRecord> pageResult, Pageable pageable, boolean includeFullText) {
+        List<AnalysisHistoryItem> items = pageResult.getContent().stream()
+                .map(record -> toItem(record, includeFullText))
+                .toList();
+
         AnalysisHistoryResponse response = new AnalysisHistoryResponse();
         response.setItems(items);
         response.setTotal(pageResult.getTotalElements());
@@ -58,8 +54,7 @@ public class HistoryService {
         return response;
     }
 
-    /** 将分析记录实体映射为列表项 DTO，包含简历和 JD 的预览文本 */
-    private AnalysisHistoryItem toItem(AnalysisRecord record) {
+    private AnalysisHistoryItem toItem(AnalysisRecord record, boolean includeFullText) {
         AnalysisHistoryItem item = new AnalysisHistoryItem();
         item.setId(record.getId());
         item.setUserId(record.getUserId());
@@ -72,13 +67,14 @@ public class HistoryService {
         item.setModelUsed(Boolean.TRUE.equals(record.getModelUsed()));
         item.setResumePreview(preview(record.getResumeText(), 300));
         item.setJdPreview(preview(record.getJdText(), 240));
-        item.setResumeText(record.getResumeText());
-        item.setJdText(record.getJdText());
+        if (includeFullText) {
+            item.setResumeText(record.getResumeText());
+            item.setJdText(record.getJdText());
+        }
         item.setCreatedAt(record.getCreatedAt());
         return item;
     }
 
-    /** 生成文本预览：将换行替换为空格，超过 max 长度则截断并加省略号 */
     private String preview(String text, int max) {
         if (text == null) {
             return "";
@@ -90,7 +86,6 @@ public class HistoryService {
         return clean.substring(0, max) + "...";
     }
 
-    /** 规范化分页参数，防止越界 */
     private Pageable normalizePage(int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(50, Math.max(size, 1));

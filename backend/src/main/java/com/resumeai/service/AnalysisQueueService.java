@@ -9,6 +9,7 @@ import com.resumeai.model.UserAccount;
 import com.resumeai.repository.AnalysisJobRepository;
 import com.resumeai.repository.UserAccountRepository;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,6 +17,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
@@ -50,6 +55,9 @@ public class AnalysisQueueService {
     private final AnalyzeService analyzeService;
     private final ObjectMapper objectMapper;
     private final Path uploadDir;
+    private final ExecutorService workerPool;
+    private final Semaphore workerSlots;
+    private final int consumeBatchSize;
 
     /** 构造函数，注入依赖并初始化上传目录路径。 */
     public AnalysisQueueService(
@@ -58,13 +66,19 @@ public class AnalysisQueueService {
             UserAccountRepository userAccountRepository,
             AnalyzeService analyzeService,
             ObjectMapper objectMapper,
-            @Value("${app.queue.upload-dir:/tmp/resume-ai-jobs}") String uploadDir) {
+            @Value("${app.queue.upload-dir:/tmp/resume-ai-jobs}") String uploadDir,
+            @Value("${app.queue.worker-count:2}") int workerCount,
+            @Value("${app.queue.consume-batch-size:2}") int consumeBatchSize) {
         this.redisTemplate = redisTemplate;
         this.analysisJobRepository = analysisJobRepository;
         this.userAccountRepository = userAccountRepository;
         this.analyzeService = analyzeService;
         this.objectMapper = objectMapper;
         this.uploadDir = Path.of(uploadDir);
+        int safeWorkers = Math.max(1, workerCount);
+        this.workerPool = Executors.newFixedThreadPool(safeWorkers);
+        this.workerSlots = new Semaphore(safeWorkers);
+        this.consumeBatchSize = Math.max(1, consumeBatchSize);
     }
 
     /** 服务启动时创建上传目录，并把数据库中的待处理任务重新放回队列。 */
@@ -192,11 +206,24 @@ public class AnalysisQueueService {
      */
     @Scheduled(fixedDelayString = "${app.queue.poll-ms:700}")
     public void consumeOne() {
-        TypedTuple<String> tuple = redisTemplate.opsForZSet().popMin(QUEUE_KEY);
-        if (tuple == null || tuple.getValue() == null) {
-            return;
+        for (int i = 0; i < consumeBatchSize; i++) {
+            if (!workerSlots.tryAcquire()) {
+                break;
+            }
+            TypedTuple<String> tuple = redisTemplate.opsForZSet().popMin(QUEUE_KEY);
+            if (tuple == null || tuple.getValue() == null) {
+                workerSlots.release();
+                break;
+            }
+            String jobId = tuple.getValue();
+            workerPool.submit(() -> {
+                try {
+                    processJob(jobId);
+                } finally {
+                    workerSlots.release();
+                }
+            });
         }
-        processJob(tuple.getValue());
     }
 
     /**
@@ -294,5 +321,18 @@ public class AnalysisQueueService {
         if (value == null) return "";
         if (value.length() <= max) return value;
         return value.substring(0, max);
+    }
+
+    @PreDestroy
+    public void shutdownWorkers() {
+        workerPool.shutdown();
+        try {
+            if (!workerPool.awaitTermination(8, TimeUnit.SECONDS)) {
+                workerPool.shutdownNow();
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            workerPool.shutdownNow();
+        }
     }
 }

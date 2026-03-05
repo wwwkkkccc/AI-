@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <!-- 根容器：未登录时使用 page-auth 样式 -->
   <div class="page" :class="{ 'page-auth': !token }">
     <!-- 顶部标题栏（仅登录后显示） -->
@@ -545,13 +545,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import AnalyzeSubmissionGroup from "./components/analyze/AnalyzeSubmissionGroup.vue";
-import AnalysisResultSummaryGroup from "./components/analyze/AnalysisResultSummaryGroup.vue";
-import JdRadarGroup from "./components/analyze/JdRadarGroup.vue";
-import ResumeAuditGroup from "./components/analyze/ResumeAuditGroup.vue";
-import ResumeChatGroup from "./components/analyze/ResumeChatGroup.vue";
-import ResumeGeneratorGroup from "./components/analyze/ResumeGeneratorGroup.vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+
+const AnalyzeSubmissionGroup = defineAsyncComponent(() => import("./components/analyze/AnalyzeSubmissionGroup.vue"));
+const AnalysisResultSummaryGroup = defineAsyncComponent(() => import("./components/analyze/AnalysisResultSummaryGroup.vue"));
+const JdRadarGroup = defineAsyncComponent(() => import("./components/analyze/JdRadarGroup.vue"));
+const ResumeAuditGroup = defineAsyncComponent(() => import("./components/analyze/ResumeAuditGroup.vue"));
+const ResumeChatGroup = defineAsyncComponent(() => import("./components/analyze/ResumeChatGroup.vue"));
+const ResumeGeneratorGroup = defineAsyncComponent(() => import("./components/analyze/ResumeGeneratorGroup.vue"));
 
 // ===== 基础配置 =====
 const apiBase = "./api";           // API 请求基础路径（相对路径，由 Nginx 代理到后端）
@@ -627,6 +628,7 @@ const queueJob = reactive({        // 当前排队任务状态
 });
 
 let pollTimer = null;              // 轮询定时器引用
+let pollDelayMs = 1200;            // 当前轮询间隔（自适应）
 
 // ===== 我的记录 =====
 const mineItems = ref([]);         // 我的分析记录列表
@@ -975,9 +977,16 @@ async function submitAuth() {
 // 停止轮询器，避免重复创建定时器或页面离开后继续请求
 function stopPolling() {
   if (pollTimer) {
-    clearInterval(pollTimer);
+    clearTimeout(pollTimer);
     pollTimer = null;
   }
+}
+
+function scheduleNextPoll(jobId) {
+  stopPolling();
+  pollTimer = setTimeout(() => {
+    pollJobStatus(jobId);
+  }, pollDelayMs);
 }
 
 // 重置排队任务状态
@@ -1100,11 +1109,17 @@ async function pollJobStatus(jobId) {
     if (queueJob.status === "PENDING") {
       const posText = queueJob.queuePosition ? `，当前排队位置：${queueJob.queuePosition}` : "";
       analyzeMessage.value = `任务已提交，排队中${posText}`;
+      // pending 阶段逐步放大间隔，降低服务器轮询压力
+      pollDelayMs = Math.min(5000, pollDelayMs + 400);
+      scheduleNextPoll(jobId);
       return;
     }
 
     if (queueJob.status === "PROCESSING") {
       analyzeMessage.value = "任务正在分析中，请稍候...";
+      // processing 阶段保持较快刷新，提升完成感知速度
+      pollDelayMs = 1400;
+      scheduleNextPoll(jobId);
       return;
     }
 
@@ -1130,10 +1145,8 @@ async function pollJobStatus(jobId) {
 // 启动轮询：先立即拉一次，再按固定间隔刷新
 function startPolling(jobId) {
   stopPolling();
+  pollDelayMs = 1200;
   pollJobStatus(jobId);
-  pollTimer = setInterval(() => {
-    pollJobStatus(jobId);
-  }, 1500);
 }
 
 // 手动刷新当前任务状态
