@@ -1,0 +1,27 @@
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# Runtime env
+.env
+.env.*
+!.env.example
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# Backend build artifacts
+backend/target/
+*.jar
+*.war
+
+# Logs
+*.log
+logs/
+
+# Jenkins local data (if using docker compose under project)
+jenkins_home/
