@@ -342,6 +342,23 @@
             </tbody>
           </table>
         </div>
+        <div class="pagination-bar" v-if="mineTotal > 0">
+          <div class="pagination-size">
+            <span>每页</span>
+            <select :value="mineSize" @change="mineChangeSize(Number($event.target.value))">
+              <option v-for="s in pageSizeOptions" :key="s" :value="s">{{ s }}</option>
+            </select>
+            <span>条</span>
+          </div>
+          <div class="pagination-pages">
+            <button class="pg-btn" :disabled="minePage === 0" @click="mineGoPage(0)">&laquo;</button>
+            <button class="pg-btn" :disabled="minePage === 0" @click="mineGoPage(minePage - 1)">&lsaquo;</button>
+            <button v-for="p in pageRange(minePage, mineTotalPages)" :key="p" class="pg-btn" :class="{ active: p === minePage }" @click="mineGoPage(p)">{{ p + 1 }}</button>
+            <button class="pg-btn" :disabled="minePage >= mineTotalPages - 1" @click="mineGoPage(minePage + 1)">&rsaquo;</button>
+            <button class="pg-btn" :disabled="minePage >= mineTotalPages - 1" @click="mineGoPage(mineTotalPages - 1)">&raquo;</button>
+          </div>
+          <span class="pagination-total">共 {{ mineTotal }} 条</span>
+        </div>
       </section>
 
       <!-- ===== 管理员 - 用户管理标签页 ===== -->
@@ -367,7 +384,7 @@
         <div class="toolbar-shell">
           <div class="toolbar-search">
             <input v-model.trim="adminUserQuery.keyword" type="text" placeholder="按用户名搜索" />
-            <button @click="loadAdminUsers">搜索</button>
+            <button @click="adminUserPage = 0; loadAdminUsers()">搜索</button>
             <button
               v-if="adminUserQuery.keyword"
               class="ghost secondary"
@@ -440,6 +457,23 @@
             </tbody>
           </table>
         </div>
+        <div class="pagination-bar" v-if="adminUserTotal > 0">
+          <div class="pagination-size">
+            <span>每页</span>
+            <select :value="adminUserSize" @change="adminUserChangeSize(Number($event.target.value))">
+              <option v-for="s in pageSizeOptions" :key="s" :value="s">{{ s }}</option>
+            </select>
+            <span>条</span>
+          </div>
+          <div class="pagination-pages">
+            <button class="pg-btn" :disabled="adminUserPage === 0" @click="adminUserGoPage(0)">&laquo;</button>
+            <button class="pg-btn" :disabled="adminUserPage === 0" @click="adminUserGoPage(adminUserPage - 1)">&lsaquo;</button>
+            <button v-for="p in pageRange(adminUserPage, adminUserTotalPages)" :key="p" class="pg-btn" :class="{ active: p === adminUserPage }" @click="adminUserGoPage(p)">{{ p + 1 }}</button>
+            <button class="pg-btn" :disabled="adminUserPage >= adminUserTotalPages - 1" @click="adminUserGoPage(adminUserPage + 1)">&rsaquo;</button>
+            <button class="pg-btn" :disabled="adminUserPage >= adminUserTotalPages - 1" @click="adminUserGoPage(adminUserTotalPages - 1)">&raquo;</button>
+          </div>
+          <span class="pagination-total">共 {{ adminUserTotal }} 条</span>
+        </div>
       </section>
 
       <!-- ===== 管理员 - 模型配置标签页 ===== -->
@@ -466,7 +500,7 @@
         <h2>管理员 - 客户简历数据</h2>
         <div class="inline">
           <input v-model.trim="adminQuery.username" type="text" placeholder="按用户名搜索" />
-          <button @click="loadAdminAnalyses">搜索</button>
+          <button @click="adminPage = 0; loadAdminAnalyses()">搜索</button>
         </div>
         <div class="record-toolbar">
           <p class="message">{{ adminMessage }}</p>
@@ -536,6 +570,23 @@
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="pagination-bar" v-if="adminTotal > 0">
+          <div class="pagination-size">
+            <span>每页</span>
+            <select :value="adminSize" @change="adminChangeSize(Number($event.target.value))">
+              <option v-for="s in pageSizeOptions" :key="s" :value="s">{{ s }}</option>
+            </select>
+            <span>条</span>
+          </div>
+          <div class="pagination-pages">
+            <button class="pg-btn" :disabled="adminPage === 0" @click="adminGoPage(0)">&laquo;</button>
+            <button class="pg-btn" :disabled="adminPage === 0" @click="adminGoPage(adminPage - 1)">&lsaquo;</button>
+            <button v-for="p in pageRange(adminPage, adminTotalPages)" :key="p" class="pg-btn" :class="{ active: p === adminPage }" @click="adminGoPage(p)">{{ p + 1 }}</button>
+            <button class="pg-btn" :disabled="adminPage >= adminTotalPages - 1" @click="adminGoPage(adminPage + 1)">&rsaquo;</button>
+            <button class="pg-btn" :disabled="adminPage >= adminTotalPages - 1" @click="adminGoPage(adminTotalPages - 1)">&raquo;</button>
+          </div>
+          <span class="pagination-total">共 {{ adminTotal }} 条</span>
         </div>
       </section>
 
@@ -704,6 +755,23 @@
             </tbody>
           </table>
         </div>
+        <div class="pagination-bar" v-if="kbDocTotal > 0">
+          <div class="pagination-size">
+            <span>每页</span>
+            <select :value="kbDocSize" @change="kbDocChangeSize(Number($event.target.value))">
+              <option v-for="s in pageSizeOptions" :key="s" :value="s">{{ s }}</option>
+            </select>
+            <span>条</span>
+          </div>
+          <div class="pagination-pages">
+            <button class="pg-btn" :disabled="kbDocPage === 0" @click="kbDocGoPage(0)">&laquo;</button>
+            <button class="pg-btn" :disabled="kbDocPage === 0" @click="kbDocGoPage(kbDocPage - 1)">&lsaquo;</button>
+            <button v-for="p in pageRange(kbDocPage, kbDocTotalPages)" :key="p" class="pg-btn" :class="{ active: p === kbDocPage }" @click="kbDocGoPage(p)">{{ p + 1 }}</button>
+            <button class="pg-btn" :disabled="kbDocPage >= kbDocTotalPages - 1" @click="kbDocGoPage(kbDocPage + 1)">&rsaquo;</button>
+            <button class="pg-btn" :disabled="kbDocPage >= kbDocTotalPages - 1" @click="kbDocGoPage(kbDocTotalPages - 1)">&raquo;</button>
+          </div>
+          <span class="pagination-total">共 {{ kbDocTotal }} 条</span>
+        </div>
 
         <!-- 题库文档内容预览弹窗 -->
         <section v-if="kbViewer.visible" class="kb-viewer">
@@ -821,12 +889,18 @@ let pollDelayMs = 1200;            // 当前轮询间隔（自适应）
 const mineItems = ref([]);         // 我的分析记录列表
 const mineMessage = ref("");       // 我的记录提示消息
 const mineLocalKeyword = ref("");
+const minePage = ref(0);
+const mineSize = ref(10);
+const mineTotal = ref(0);
 
 // ===== 管理端：用户管理 =====
 const adminUsers = ref([]);        // 用户列表
 const adminUserQuery = reactive({ keyword: "" }); // 用户搜索关键词
 const adminUsersMessage = ref(""); // 用户管理提示消息
 const adminUserLoadingId = ref(null); // 正在操作的用户 ID（防重复点击）
+const adminUserPage = ref(0);
+const adminUserSize = ref(10);
+const adminUserTotal = ref(0);
 
 // ===== 管理端：模型配置 =====
 const configLoading = ref(false);  // 配置保存加载状态
@@ -842,11 +916,17 @@ const configForm = reactive({      // 模型配置表单
 const adminQuery = reactive({ username: "" }); // 客户简历搜索条件
 const adminItems = ref([]);        // 客户简历列表
 const adminMessage = ref("");      // 客户简历提示消息
+const adminPage = ref(0);
+const adminSize = ref(10);
+const adminTotal = ref(0);
 
 // ===== 管理端：面试题库 =====
 const kbDocs = ref([]);            // 题库文档列表
 const kbMessage = ref("");         // 题库操作提示消息
 const kbLocalKeyword = ref("");
+const kbDocPage = ref(0);
+const kbDocSize = ref(10);
+const kbDocTotal = ref(0);
 const kbUploadLoading = ref(false);  // 文档上传加载状态
 const kbCrawlLoading = ref(false);   // 爬虫入库加载状态
 const kbLlmLoading = ref(false);     // 大模型生成加载状态
@@ -1057,7 +1137,7 @@ const filteredMineItems = computed(() => {
 const mineStatItems = computed(() => {
   const latest = mineItems.value[0];
   return [
-    { label: "记录数", value: `${mineItems.value.length} 条` },
+    { label: "记录数", value: `${mineTotal.value} 条` },
     { label: "平均评分", value: mineItems.value.length ? formatScore(averageScore(mineItems.value, "score")) : "-" },
     { label: "平均覆盖率", value: mineItems.value.length ? formatCoverage(averageScore(mineItems.value, "coverage")) : "-" },
     { label: "最近岗位", value: latest?.targetRole || "-" }
@@ -1069,7 +1149,7 @@ const adminUserStatItems = computed(() => {
   const blacklistedCount = adminUsers.value.filter((item) => item.blacklisted).length;
   const adminCount = adminUsers.value.filter((item) => (item.role || "").toUpperCase() === "ADMIN").length;
   return [
-    { label: "当前用户", value: `${adminUsers.value.length} 人` },
+    { label: "当前用户", value: `${adminUserTotal.value} 人` },
     { label: "VIP 用户", value: `${vipCount} 人` },
     { label: "管理员", value: `${adminCount} 人` },
     { label: "黑名单", value: `${blacklistedCount} 人` }
@@ -1087,11 +1167,40 @@ const filteredKbDocs = computed(() => {
 });
 
 const kbStatItems = computed(() => [
-  { label: "文档总数", value: `${kbDocs.value.length} 份` },
+  { label: "文档总数", value: `${kbDocTotal.value} 份` },
   { label: "题目累计", value: `${sumField(kbDocs.value, "questionCount")} 题` },
   { label: "失败页面", value: `${kbCrawlErrors.value.length} 个` },
   { label: "当前预览", value: kbViewer.visible ? "已打开" : "未打开" }
 ]);
+
+// ===== 分页 computed & helpers =====
+const pageSizeOptions = [5, 10, 20, 50];
+const mineTotalPages = computed(() => Math.ceil(mineTotal.value / mineSize.value) || 1);
+const adminUserTotalPages = computed(() => Math.ceil(adminUserTotal.value / adminUserSize.value) || 1);
+const adminTotalPages = computed(() => Math.ceil(adminTotal.value / adminSize.value) || 1);
+const kbDocTotalPages = computed(() => Math.ceil(kbDocTotal.value / kbDocSize.value) || 1);
+
+function pageRange(current, total) {
+  const range = [];
+  const delta = 2;
+  let start = Math.max(0, current - delta);
+  let end = Math.min(total - 1, current + delta);
+  if (end - start < delta * 2) {
+    start = Math.max(0, end - delta * 2);
+    end = Math.min(total - 1, start + delta * 2);
+  }
+  for (let i = start; i <= end; i++) range.push(i);
+  return range;
+}
+
+function mineGoPage(p) { minePage.value = p; loadMineAnalyses(); }
+function mineChangeSize(s) { mineSize.value = s; minePage.value = 0; loadMineAnalyses(); }
+function adminUserGoPage(p) { adminUserPage.value = p; loadAdminUsers(); }
+function adminUserChangeSize(s) { adminUserSize.value = s; adminUserPage.value = 0; loadAdminUsers(); }
+function adminGoPage(p) { adminPage.value = p; loadAdminAnalyses(); }
+function adminChangeSize(s) { adminSize.value = s; adminPage.value = 0; loadAdminAnalyses(); }
+function kbDocGoPage(p) { kbDocPage.value = p; loadKbDocs(); }
+function kbDocChangeSize(s) { kbDocSize.value = s; kbDocPage.value = 0; loadKbDocs(); }
 
 // 统一注入鉴权头，避免每个请求重复拼 Authorization
 function authHeaders(extra = {}) {
@@ -1813,9 +1922,10 @@ async function runAuditFromCurrent() {
 // 加载我的分析记录列表（分页）
 async function loadMineAnalyses() {
   try {
-    const data = await apiRequest("/analyses/mine?page=0&size=20");
+    const data = await apiRequest(`/analyses/mine?page=${minePage.value}&size=${mineSize.value}`);
     mineItems.value = data.items || [];
-    mineMessage.value = `总数：${data.total ?? 0}`;
+    mineTotal.value = data.total ?? 0;
+    mineMessage.value = "";
   } catch (err) {
     mineMessage.value = toZhMessage(err.message || "加载失败");
   }
@@ -1825,9 +1935,10 @@ async function loadMineAnalyses() {
 async function loadAdminUsers() {
   try {
     const keyword = encodeURIComponent(adminUserQuery.keyword || "");
-    const data = await apiRequest(`/admin/users?page=0&size=50&keyword=${keyword}`);
+    const data = await apiRequest(`/admin/users?page=${adminUserPage.value}&size=${adminUserSize.value}&keyword=${keyword}`);
     adminUsers.value = data.items || [];
-    adminUsersMessage.value = `总数：${data.total ?? 0}`;
+    adminUserTotal.value = data.total ?? 0;
+    adminUsersMessage.value = "";
   } catch (err) {
     adminUsersMessage.value = toZhMessage(err.message || "加载用户失败");
   }
@@ -1921,9 +2032,10 @@ async function saveConfig() {
 async function loadAdminAnalyses() {
   try {
     const query = encodeURIComponent(adminQuery.username || "");
-    const data = await apiRequest(`/admin/analyses?page=0&size=20&username=${query}`);
+    const data = await apiRequest(`/admin/analyses?page=${adminPage.value}&size=${adminSize.value}&username=${query}`);
     adminItems.value = data.items || [];
-    adminMessage.value = `总数：${data.total ?? 0}`;
+    adminTotal.value = data.total ?? 0;
+    adminMessage.value = "";
   } catch (err) {
     adminMessage.value = toZhMessage(err.message || "加载客户数据失败");
   }
@@ -1932,9 +2044,10 @@ async function loadAdminAnalyses() {
 // 加载面试题库文档列表
 async function loadKbDocs() {
   try {
-    const data = await apiRequest("/admin/interview-kb/docs?page=0&size=50");
+    const data = await apiRequest(`/admin/interview-kb/docs?page=${kbDocPage.value}&size=${kbDocSize.value}`);
     kbDocs.value = data.items || [];
-    kbMessage.value = `文档数：${data.total ?? 0}`;
+    kbDocTotal.value = data.total ?? 0;
+    kbMessage.value = "";
   } catch (err) {
     kbMessage.value = toZhMessage(err.message || "加载面试题库失败");
   }
