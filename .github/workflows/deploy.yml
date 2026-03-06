@@ -1,0 +1,82 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deploy configuration
+        id: gate
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=0
+          for key in DEPLOY_HOST DEPLOY_PORT DEPLOY_USER; do
+            if [ -z "${!key}" ]; then
+              echo "::warning::Missing secret ${key}"
+              missing=1
+            fi
+          done
+          if [ -z "${DEPLOY_PASSWORD}" ] && [ -z "${DEPLOY_SSH_KEY}" ]; then
+            echo "::warning::Set DEPLOY_PASSWORD or DEPLOY_SSH_KEY"
+            missing=1
+          fi
+          if [ "${missing}" -eq 1 ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+
+      - name: Install sshpass
+        if: steps.gate.outputs.enabled == 'true' && secrets.DEPLOY_PASSWORD != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Prepare SSH key
+        if: steps.gate.outputs.enabled == 'true' && secrets.DEPLOY_SSH_KEY != ''
+        shell: bash
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "SSH_KEY_PATH=$HOME/.ssh/deploy_key" >> "$GITHUB_ENV"
+
+      - name: Deploy to server
+        if: steps.gate.outputs.enabled == 'true'
+        shell: bash
+        env:
+          DEPLOY_BRANCH: ${{ github.ref_name }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_PATH: /opt/resume-ai-stack
+          DEPLOY_REPO_URL: https://github.com/wwwkkkccc/AI-.git
+          PACKAGE_TAG: gha-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          chmod +x scripts/ci/deploy_remote.sh
+          ./scripts/ci/deploy_remote.sh
