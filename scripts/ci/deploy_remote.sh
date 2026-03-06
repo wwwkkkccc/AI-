@@ -88,6 +88,23 @@ if [ -f "\${DEPLOY_PATH}/.env" ]; then
   cp "\${DEPLOY_PATH}/.env" "\${ENV_BACKUP}"
 fi
 
+# 清理旧 Jenkins 容器、SSH 密钥和残留目录，避免继续占内存或留下风险入口
+if docker ps -a --format '{{.Names}}' | grep -qx 'resume-ai-jenkins'; then
+  docker rm -f resume-ai-jenkins || true
+fi
+
+JENKINS_KEY_PATH='/opt/jenkins-stack/jenkins_home/.ssh/id_rsa.pub'
+if [ -f "\${JENKINS_KEY_PATH}" ] && [ -f /root/.ssh/authorized_keys ]; then
+  AUTH_TMP="/tmp/root-authorized-keys-\$\$"
+  grep -Fvx -f "\${JENKINS_KEY_PATH}" /root/.ssh/authorized_keys > "\${AUTH_TMP}" || true
+  cat "\${AUTH_TMP}" > /root/.ssh/authorized_keys
+  chmod 600 /root/.ssh/authorized_keys
+  rm -f "\${AUTH_TMP}"
+fi
+
+rm -rf /opt/jenkins-stack
+docker images 'jenkins/jenkins' -q | xargs -r docker rmi -f || true
+
 # 删除旧的代码目录和文件，避免残留过期文件
 rm -rf "\${DEPLOY_PATH}/backend" "\${DEPLOY_PATH}/frontend" "\${DEPLOY_PATH}/docs" "\${DEPLOY_PATH}/scripts" "\${DEPLOY_PATH}/jenkins"
 rm -f "\${DEPLOY_PATH}/docker-compose.yml" "\${DEPLOY_PATH}/README.md" "\${DEPLOY_PATH}/PROJECT_DOC.md" "\${DEPLOY_PATH}/.env.example" "\${DEPLOY_PATH}/.gitignore" "\${DEPLOY_PATH}/Jenkinsfile"
@@ -109,7 +126,7 @@ fi
 
 # 进入部署目录，使用 Docker Compose 构建并启动后端和前端服务
 cd "\${DEPLOY_PATH}"
-docker compose up -d --build backend frontend
+docker compose up -d --build mysql redis backend frontend
 # 显示容器运行状态
 docker compose ps
 EOF

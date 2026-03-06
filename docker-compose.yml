@@ -8,6 +8,9 @@ services:
     command:
       - --character-set-server=utf8mb4       # 设置字符集为 utf8mb4（支持中文和 emoji）
       - --collation-server=utf8mb4_unicode_ci  # 设置排序规则
+      - --innodb-buffer-pool-size=128M       # 降低默认缓存占用，适配 2GB 机器
+      - --performance-schema=OFF             # 关闭性能采集，减少额外内存占用
+      - --max-connections=80                 # 控制连接数，避免小机器被挤爆
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ChangeThisRootPass123!}  # root 密码
       MYSQL_DATABASE: resume_ai              # 自动创建的数据库名
@@ -52,6 +55,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-ChangeThisAppPass123!}
       SPRING_DATA_REDIS_HOST: redis          # Redis 主机（容器名即主机名）
       SPRING_DATA_REDIS_PORT: 6379
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx512m -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom
       APP_AI_DEFAULT_BASE_URL: ${APP_AI_DEFAULT_BASE_URL:-https://aicodelink.shop}  # AI 接口地址
       APP_AI_DEFAULT_API_KEY: ${APP_AI_DEFAULT_API_KEY:-}                            # AI 接口密钥
       APP_AI_DEFAULT_MODEL: ${APP_AI_DEFAULT_MODEL:-gpt-5.3-codex}                  # 默认模型
