@@ -1,52 +1,71 @@
 <template>
   <!-- 根容器：未登录时使用 page-auth 样式 -->
   <div class="page" :class="{ 'page-auth': !token }">
-    <!-- 顶部标题栏（仅登录后显示） -->
-    <header v-if="token" class="top">
-      <h1>AI 简历分析系统</h1>
-      <p>支持排队分析、VIP 优先、用户管理与配置管理</p>
-    </header>
-
     <!-- ===== 登录/注册页面 ===== -->
     <section v-if="!token" class="auth-screen">
-      <div class="auth-wrapper">
-        <form class="auth-form" @submit.prevent="submitAuth">
-          <h2>{{ authMode === 'login' ? '登录' : '注册' }}</h2>
-
-          <div class="input-field">
-            <input v-model.trim="activeAuthForm.username" type="text" required placeholder=" " />
-            <label>请输入用户名</label>
-          </div>
-
-          <div class="input-field">
-            <input v-model.trim="activeAuthForm.password" type="password" required placeholder=" " />
-            <label>请输入密码</label>
-          </div>
-
-          <div class="forget">
-            <label for="remember">
-              <input id="remember" v-model="rememberMe" type="checkbox" />
-              <p>记住我</p>
-            </label>
-            <a href="#" @click.prevent="toggleAuthMode">
-              {{ authMode === 'login' ? '去注册' : '去登录' }}
-            </a>
-          </div>
-
-          <button :disabled="authLoading" type="submit">
-            {{ authLoading ? '提交中...' : authMode === 'login' ? '登录' : '注册' }}
-          </button>
-
-          <div class="register">
-            <p v-if="authMode === 'login'">
-              还没有账号？<a href="#" @click.prevent="setAuthMode('register')">立即注册</a>
-            </p>
-            <p v-else>
-              已有账号？<a href="#" @click.prevent="setAuthMode('login')">立即登录</a>
+      <div class="auth-shell">
+        <section class="auth-showcase">
+          <div class="auth-showcase-copy">
+            <span class="eyebrow">Resume AI Workspace</span>
+            <h1>让简历优化、岗位匹配与管理协同落在同一张工作台上</h1>
+            <p>
+              参考国际大厂产品常见的信息分层与留白节奏，保留你现有功能，重做工作台骨架，
+              让分析路径、结果反馈和管理入口都更清楚。
             </p>
           </div>
-          <p class="auth-message">{{ authMessage }}</p>
-        </form>
+
+          <div class="auth-highlight-grid">
+            <article v-for="item in authHighlights" :key="item.title" class="auth-highlight-card">
+              <span>{{ item.tag }}</span>
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.desc }}</p>
+            </article>
+          </div>
+        </section>
+
+        <div class="auth-wrapper">
+          <form class="auth-form" @submit.prevent="submitAuth">
+            <span class="auth-badge">{{ authMode === 'login' ? '欢迎回来' : '创建账号' }}</span>
+            <h2>{{ authMode === 'login' ? '登录工作台' : '注册新账号' }}</h2>
+            <p class="auth-subtitle">
+              {{ authMode === 'login' ? '继续你的简历分析与管理任务。' : '几秒内完成注册，开始体验完整分析闭环。' }}
+            </p>
+
+            <div class="input-field">
+              <input v-model.trim="activeAuthForm.username" type="text" required placeholder=" " />
+              <label>请输入用户名</label>
+            </div>
+
+            <div class="input-field">
+              <input v-model.trim="activeAuthForm.password" type="password" required placeholder=" " />
+              <label>请输入密码</label>
+            </div>
+
+            <div class="forget">
+              <label for="remember">
+                <input id="remember" v-model="rememberMe" type="checkbox" />
+                <p>记住我</p>
+              </label>
+              <a href="#" @click.prevent="toggleAuthMode">
+                {{ authMode === 'login' ? '去注册' : '去登录' }}
+              </a>
+            </div>
+
+            <button :disabled="authLoading" type="submit">
+              {{ authLoading ? '提交中...' : authMode === 'login' ? '登录' : '注册' }}
+            </button>
+
+            <div class="register">
+              <p v-if="authMode === 'login'">
+                还没有账号？<a href="#" @click.prevent="setAuthMode('register')">立即注册</a>
+              </p>
+              <p v-else>
+                已有账号？<a href="#" @click.prevent="setAuthMode('login')">立即登录</a>
+              </p>
+            </div>
+            <p class="auth-message">{{ authMessage }}</p>
+          </form>
+        </div>
       </div>
     </section>
 
@@ -56,28 +75,55 @@
         <!-- 左侧导航面板 -->
         <aside class="side-panel">
           <div class="brand-block">
+            <span class="eyebrow brand-eyebrow">Resume AI Workspace</span>
             <h1>AI 简历分析系统</h1>
-            <p>淡雅灰与暗金色工作台</p>
+            <p>清晰、克制、专业的企业级工作台</p>
           </div>
 
           <!-- 当前用户信息展示区 -->
           <section class="side-user">
-            <div>
-              <strong>{{ me.username }}</strong>
+            <div class="side-user-top">
+              <div>
+                <span class="user-overline">当前账号</span>
+                <strong>{{ me.username }}</strong>
+              </div>
               <span class="pill">{{ roleText(me.role) }}</span>
-              <span v-if="me.vip" class="pill vip-pill">VIP</span>
+            </div>
+            <div class="side-user-tags">
+              <span v-if="me.vip" class="pill vip-pill">VIP 优先</span>
+              <span v-else class="pill">标准优先级</span>
               <span v-if="me.blacklisted" class="pill danger-pill">已拉黑</span>
             </div>
           </section>
 
           <!-- 功能标签页切换（管理员可见更多标签） -->
-          <section class="tabs side-tabs">
-            <button :class="{ active: tab === 'analyze' }" @click="tab = 'analyze'">简历分析</button>
-            <button :class="{ active: tab === 'mine' }" @click="switchMine">我的记录</button>
-            <button v-if="isAdmin" :class="{ active: tab === 'adminUsers' }" @click="switchAdminUsers">用户管理</button>
-            <button v-if="isAdmin" :class="{ active: tab === 'adminConfig' }" @click="switchAdminConfig">模型配置</button>
-            <button v-if="isAdmin" :class="{ active: tab === 'adminData' }" @click="switchAdminData">客户简历</button>
-            <button v-if="isAdmin" :class="{ active: tab === 'adminKb' }" @click="switchAdminKb">面试题库</button>
+          <section class="side-nav-group">
+            <p class="side-group-title">工作区导航</p>
+            <div class="side-nav-list">
+              <button
+                v-for="item in workspaceNavItems"
+                :key="item.key"
+                class="side-nav-item"
+                :class="{ active: tab === item.key }"
+                @click="openWorkspaceTab(item.key)"
+              >
+                <span class="side-nav-badge">{{ item.badge }}</span>
+                <span class="side-nav-copy">
+                  <strong>{{ item.label }}</strong>
+                  <small>{{ item.desc }}</small>
+                </span>
+              </button>
+            </div>
+          </section>
+
+          <section class="side-insight">
+            <p class="side-group-title">当前状态</p>
+            <div class="side-insight-list">
+              <div v-for="item in sidebarInsights" :key="item.label" class="side-insight-item">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
+            </div>
           </section>
 
           <p class="side-note">VIP 用户任务会被优先消费</p>
@@ -86,24 +132,61 @@
         <!-- 右侧主内容区 -->
         <main class="content-panel">
           <!-- 页面标题栏与退出按钮 -->
-          <section class="main-head">
-            <div>
-              <h2>{{ tabTitle(tab) }}</h2>
-              <p>支持排队分析、VIP 优先、用户管理与配置管理</p>
+          <section class="main-head workspace-hero">
+            <div class="hero-copy">
+              <span class="eyebrow">{{ currentTabMeta.kicker }}</span>
+              <h2>{{ currentTabMeta.title }}</h2>
+              <p>{{ currentTabMeta.description }}</p>
+              <div class="hero-tags">
+                <span class="hero-tag">{{ me.vip ? 'VIP 优先队列' : '标准优先级' }}</span>
+                <span class="hero-tag">{{ currentTabMeta.tag }}</span>
+                <span v-if="queueJob.jobId" class="hero-tag">{{ statusText(queueJob.status) }}</span>
+              </div>
             </div>
-            <button class="ghost" @click="logout">退出登录</button>
+            <div class="hero-actions">
+              <button
+                v-if="tab === 'analyze' && analyzeSubtab !== 'analysis'"
+                class="ghost secondary"
+                @click="analyzeSubtab = 'analysis'"
+              >
+                返回基础分析
+              </button>
+              <button class="ghost" @click="logout">退出登录</button>
+            </div>
+          </section>
+
+          <section class="overview-grid">
+            <article v-for="item in overviewStats" :key="item.label" class="overview-card">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+              <p>{{ item.desc }}</p>
+            </article>
           </section>
 
           <!-- ===== 简历分析标签页 ===== -->
           <section v-if="tab === 'analyze'" class="card">
-        <h2>简历分析</h2>
+        <div class="analyze-header">
+          <div class="section-text">
+            <span class="section-kicker">Core Workflow</span>
+            <h2>简历分析工作台</h2>
+            <p>先完成一次基础分析，再进入生成、对话、雷达图和真实性检测，形成完整优化闭环。</p>
+          </div>
+          <div class="section-hint">
+            <span>{{ currentAnalyzeMeta.label }}</span>
+            <p>{{ currentAnalyzeMeta.desc }}</p>
+          </div>
+        </div>
 
         <div class="analyze-subtabs">
-          <button :class="{ active: analyzeSubtab === 'analysis' }" @click="analyzeSubtab = 'analysis'">基础分析</button>
-          <button :class="{ active: analyzeSubtab === 'generate' }" @click="analyzeSubtab = 'generate'">生成/重写</button>
-          <button :class="{ active: analyzeSubtab === 'chat' }" @click="analyzeSubtab = 'chat'">优化对话</button>
-          <button :class="{ active: analyzeSubtab === 'radar' }" @click="analyzeSubtab = 'radar'">JD雷达图</button>
-          <button :class="{ active: analyzeSubtab === 'audit' }" @click="analyzeSubtab = 'audit'">真实性检测</button>
+          <button
+            v-for="item in analyzeTabItems"
+            :key="item.key"
+            :class="{ active: analyzeSubtab === item.key }"
+            @click="analyzeSubtab = item.key"
+          >
+            <span>{{ item.label }}</span>
+            <small>{{ item.desc }}</small>
+          </button>
         </div>
 
         <ResumeGeneratorGroup
@@ -180,13 +263,36 @@
 
       <!-- ===== 我的简历记录标签页 ===== -->
       <section v-else-if="tab === 'mine'" class="card">
-        <h2>我的简历记录</h2>
-        <div class="record-toolbar">
-          <p class="message">{{ mineMessage }}</p>
-          <span class="record-tip">按时间倒序展示，重点建议可展开查看</span>
+        <div class="panel-head">
+          <div class="section-text">
+            <span class="section-kicker">History Center</span>
+            <h2>我的简历记录</h2>
+            <p>按时间回看你的分析资产，快速找到最近岗位、得分变化和可复用建议。</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost secondary" @click="loadMineAnalyses">刷新记录</button>
+          </div>
+        </div>
+
+        <div class="stat-strip">
+          <article v-for="item in mineStatItems" :key="item.label" class="stat-chip">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </article>
+        </div>
+
+        <div class="toolbar-shell">
+          <div class="toolbar-search">
+            <input v-model.trim="mineLocalKeyword" type="text" placeholder="按文件名、岗位或建议筛选" />
+            <button v-if="mineLocalKeyword" class="ghost secondary" @click="mineLocalKeyword = ''">清空</button>
+          </div>
+          <div class="toolbar-meta">
+            <span class="record-tip">按时间倒序展示，重点建议可展开查看</span>
+            <p class="message compact">{{ mineMessage }}</p>
+          </div>
         </div>
         <div class="table-wrap">
-          <table class="lux-table mine-table">
+          <table class="lux-table mine-table dense-table">
             <thead>
               <tr>
                 <th>编号</th>
@@ -199,7 +305,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in mineItems" :key="item.id">
+              <tr v-if="!filteredMineItems.length">
+                <td colspan="7" class="table-empty">
+                  <strong>{{ mineItems.length ? '没有符合条件的记录' : '还没有分析记录' }}</strong>
+                  <span>{{ mineItems.length ? '试试更换筛选关键词。' : '先去“简历分析”提交一次任务，这里会自动沉淀历史结果。' }}</span>
+                </td>
+              </tr>
+              <tr v-for="item in filteredMineItems" :key="item.id">
                 <td class="cell-id">#{{ item.id }}</td>
                 <td class="file-cell">
                   <div class="file-name">{{ item.filename || '-' }}</div>
@@ -234,14 +346,43 @@
 
       <!-- ===== 管理员 - 用户管理标签页 ===== -->
       <section v-else-if="tab === 'adminUsers'" class="card">
-        <h2>管理员 - 用户管理</h2>
-        <div class="inline">
-          <input v-model.trim="adminUserQuery.keyword" type="text" placeholder="按用户名搜索" />
-          <button @click="loadAdminUsers">搜索</button>
+        <div class="panel-head">
+          <div class="section-text">
+            <span class="section-kicker">User Operations</span>
+            <h2>管理员 - 用户管理</h2>
+            <p>统一处理检索、权限状态和风险控制，让用户治理更接近标准后台工作流。</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost secondary" @click="loadAdminUsers">刷新列表</button>
+          </div>
         </div>
-        <p class="message">{{ adminUsersMessage }}</p>
+
+        <div class="stat-strip">
+          <article v-for="item in adminUserStatItems" :key="item.label" class="stat-chip">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </article>
+        </div>
+
+        <div class="toolbar-shell">
+          <div class="toolbar-search">
+            <input v-model.trim="adminUserQuery.keyword" type="text" placeholder="按用户名搜索" />
+            <button @click="loadAdminUsers">搜索</button>
+            <button
+              v-if="adminUserQuery.keyword"
+              class="ghost secondary"
+              @click="adminUserQuery.keyword = ''; loadAdminUsers()"
+            >
+              清空
+            </button>
+          </div>
+          <div class="toolbar-meta">
+            <span class="record-tip">可直接批量巡检账号状态、VIP 和黑名单</span>
+            <p class="message compact">{{ adminUsersMessage }}</p>
+          </div>
+        </div>
         <div class="table-wrap">
-          <table>
+          <table class="dense-table">
             <thead>
               <tr>
                 <th>ID</th>
@@ -255,12 +396,26 @@
               </tr>
             </thead>
             <tbody>
+              <tr v-if="!adminUsers.length">
+                <td colspan="8" class="table-empty">
+                  <strong>没有找到用户</strong>
+                  <span>请调整搜索关键词，或刷新后再试。</span>
+                </td>
+              </tr>
               <tr v-for="item in adminUsers" :key="item.id">
                 <td>{{ item.id }}</td>
                 <td>{{ item.username }}</td>
-                <td>{{ roleText(item.role) }}</td>
-                <td>{{ booleanText(item.vip) }}</td>
-                <td>{{ booleanText(item.blacklisted) }}</td>
+                <td><span class="role-tag">{{ roleText(item.role) }}</span></td>
+                <td>
+                  <span class="state-pill" :class="item.vip ? 'state-yes' : 'state-no'">
+                    {{ item.vip ? 'VIP' : '普通' }}
+                  </span>
+                </td>
+                <td>
+                  <span class="state-pill" :class="item.blacklisted ? 'state-no' : 'state-yes'">
+                    {{ item.blacklisted ? '已拉黑' : '正常' }}
+                  </span>
+                </td>
                 <td>{{ formatTime(item.createdAt) }}</td>
                 <td>{{ formatTime(item.lastLoginAt) }}</td>
                 <td>
@@ -386,7 +541,24 @@
 
       <!-- ===== 管理员 - 面试题库标签页 ===== -->
       <section v-else class="card">
-        <h2>管理员 - 面试题库</h2>
+        <div class="panel-head">
+          <div class="section-text">
+            <span class="section-kicker">Knowledge Operations</span>
+            <h2>管理员 - 面试题库</h2>
+            <p>把上传、爬取与模型生成聚合到同一页，同时补上文档筛选、统计和空状态反馈。</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost secondary" @click="loadKbDocs">刷新题库</button>
+          </div>
+        </div>
+
+        <div class="stat-strip">
+          <article v-for="item in kbStatItems" :key="item.label" class="stat-chip">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </article>
+        </div>
+
         <div class="kb-grid">
           <!-- 方式一：手动上传面试文档 -->
           <form class="kb-block" @submit.prevent="uploadKbDoc">
@@ -481,13 +653,22 @@
             <button :disabled="kbUploadLoading || kbCrawlLoading || kbLlmLoading">{{ kbLlmLoading ? '生成中...' : '生成并入库' }}</button>
           </form>
         </div>
-        <p class="message">{{ kbMessage }}</p>
+        <div class="toolbar-shell toolbar-shell-top-gap">
+          <div class="toolbar-search">
+            <input v-model.trim="kbLocalKeyword" type="text" placeholder="按标题、文件名或上传人筛选当前列表" />
+            <button v-if="kbLocalKeyword" class="ghost secondary" @click="kbLocalKeyword = ''">清空</button>
+          </div>
+          <div class="toolbar-meta">
+            <span class="record-tip">支持对当前已加载文档做本地快速筛选</span>
+            <p class="message compact">{{ kbMessage }}</p>
+          </div>
+        </div>
         <details v-if="kbCrawlErrors.length" class="detail">
           <summary>本次爬取失败页面（{{ kbCrawlErrors.length }}）</summary>
           <pre>{{ kbCrawlErrors.join('\n') }}</pre>
         </details>
         <div class="table-wrap">
-          <table>
+          <table class="dense-table">
             <thead>
               <tr>
                 <th>ID</th>
@@ -500,7 +681,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in kbDocs" :key="item.id">
+              <tr v-if="!filteredKbDocs.length">
+                <td colspan="7" class="table-empty">
+                  <strong>{{ kbDocs.length ? '没有符合条件的题库文档' : '题库中还没有文档' }}</strong>
+                  <span>{{ kbDocs.length ? '试试更换筛选关键词。' : '可以从上传、爬取或模型生成三种入口开始构建题库。' }}</span>
+                </td>
+              </tr>
+              <tr v-for="item in filteredKbDocs" :key="item.id">
                 <td>{{ item.id }}</td>
                 <td>{{ item.title || '-' }}</td>
                 <td>{{ item.filename || '-' }}</td>
@@ -633,6 +820,7 @@ let pollDelayMs = 1200;            // 当前轮询间隔（自适应）
 // ===== 我的记录 =====
 const mineItems = ref([]);         // 我的分析记录列表
 const mineMessage = ref("");       // 我的记录提示消息
+const mineLocalKeyword = ref("");
 
 // ===== 管理端：用户管理 =====
 const adminUsers = ref([]);        // 用户列表
@@ -658,6 +846,7 @@ const adminMessage = ref("");      // 客户简历提示消息
 // ===== 管理端：面试题库 =====
 const kbDocs = ref([]);            // 题库文档列表
 const kbMessage = ref("");         // 题库操作提示消息
+const kbLocalKeyword = ref("");
 const kbUploadLoading = ref(false);  // 文档上传加载状态
 const kbCrawlLoading = ref(false);   // 爬虫入库加载状态
 const kbLlmLoading = ref(false);     // 大模型生成加载状态
@@ -704,6 +893,205 @@ const isAdmin = computed(() => (me.role || "").toUpperCase() === "ADMIN");
 const activeAuthForm = computed(() => (authMode.value === "login" ? loginForm : registerForm));
 // 计算属性：题库预览是否还有更多数据可加载
 const kbViewerHasMore = computed(() => kbViewer.questions.length < kbViewer.total);
+
+const authHighlights = [
+  {
+    tag: "Workflow",
+    title: "分析闭环",
+    desc: "从简历上传、结果汇总到生成优化稿，关键动作保持在同一条主路径内。"
+  },
+  {
+    tag: "Collaboration",
+    title: "角色分层",
+    desc: "普通用户专注分析体验，管理员聚焦用户、模型配置和知识库治理。"
+  },
+  {
+    tag: "Feedback",
+    title: "即时反馈",
+    desc: "队列状态、结果摘要和关键指标在主工作区持续可见，减少跳转成本。"
+  }
+];
+
+const analyzeTabItems = [
+  { key: "analysis", label: "基础分析", desc: "提交简历并获得结构化结果" },
+  { key: "generate", label: "生成 / 重写", desc: "按 JD 或分析结果生成简历" },
+  { key: "chat", label: "优化对话", desc: "围绕结果做多轮追问与润色" },
+  { key: "radar", label: "JD 雷达图", desc: "查看岗位维度匹配度分布" },
+  { key: "audit", label: "真实性检测", desc: "识别夸大和风险表达" }
+];
+
+const workspaceNavItems = computed(() => {
+  const items = [
+    { key: "analyze", badge: "AI", label: "简历分析", desc: "提交任务、查看结果、继续优化" },
+    { key: "mine", badge: "ME", label: "我的记录", desc: "回看历史分析与重点建议" }
+  ];
+  if (isAdmin.value) {
+    items.push(
+      { key: "adminUsers", badge: "USR", label: "用户管理", desc: "统一维护账号、VIP 与黑名单" },
+      { key: "adminConfig", badge: "CFG", label: "模型配置", desc: "配置模型地址、密钥与名称" },
+      { key: "adminData", badge: "DB", label: "客户简历", desc: "检索履历数据与模型使用情况" },
+      { key: "adminKb", badge: "KB", label: "面试题库", desc: "上传、抓取或生成知识资产" }
+    );
+  }
+  return items;
+});
+
+const currentTabMeta = computed(() => {
+  const map = {
+    analyze: {
+      kicker: "Core Workflow",
+      title: "简历分析工作台",
+      description: "围绕岗位匹配、AI 生成与后续优化，形成一条清晰的分析主链路。",
+      tag: "分析闭环"
+    },
+    mine: {
+      kicker: "History",
+      title: "我的记录",
+      description: "按时间回看历史分析结果，快速提炼最有价值的修改建议。",
+      tag: "个人资产"
+    },
+    adminUsers: {
+      kicker: "Administration",
+      title: "用户管理",
+      description: "集中管理账号状态、VIP 权限与访问风险，减少后台操作成本。",
+      tag: "账号治理"
+    },
+    adminConfig: {
+      kicker: "Model Ops",
+      title: "模型配置",
+      description: "统一管理模型连接参数，让生成、题库与分析能力保持一致。",
+      tag: "模型中台"
+    },
+    adminData: {
+      kicker: "Data Review",
+      title: "客户简历",
+      description: "从用户维度查看简历分析数据与模型使用情况，便于运营回溯。",
+      tag: "履历洞察"
+    },
+    adminKb: {
+      kicker: "Knowledge Base",
+      title: "面试题库",
+      description: "通过上传、抓取与模型生成三种入口构建长期可复用的题库资产。",
+      tag: "知识资产"
+    }
+  };
+  return map[tab.value] || map.analyze;
+});
+
+const currentAnalyzeMeta = computed(() => analyzeTabItems.find((item) => item.key === analyzeSubtab.value) || analyzeTabItems[0]);
+
+const sidebarInsights = computed(() => [
+  { label: "当前身份", value: roleText(me.role) || "-" },
+  { label: "任务优先级", value: me.vip ? "VIP" : "标准" },
+  { label: "当前任务", value: queueJob.jobId ? statusText(queueJob.status) : "待提交" }
+]);
+
+const overviewStats = computed(() => {
+  if (tab.value === "mine") {
+    const latest = mineItems.value[0];
+    return [
+      { label: "当前加载", value: `${mineItems.value.length} 条`, desc: "展示最近一次拉取到的历史记录。" },
+      { label: "最近岗位", value: latest?.targetRole || "-", desc: "用于快速定位最近分析的目标岗位。" },
+      { label: "最近评分", value: latest ? formatScore(latest.score) : "-", desc: "帮助判断最近一次优化成效。" },
+      { label: "最近时间", value: latest ? formatCompactTime(latest.createdAt) : "-", desc: "按时间倒序查看历史变化。" }
+    ];
+  }
+
+  if (tab.value === "adminUsers") {
+    const vipCount = adminUsers.value.filter((item) => item.vip).length;
+    const blacklistedCount = adminUsers.value.filter((item) => item.blacklisted).length;
+    return [
+      { label: "当前加载", value: `${adminUsers.value.length} 人`, desc: "当前列表内的用户数量。" },
+      { label: "VIP 用户", value: `${vipCount} 人`, desc: "用于观察高优先级账号规模。" },
+      { label: "拉黑用户", value: `${blacklistedCount} 人`, desc: "快速掌握风险账号数量。" },
+      { label: "当前筛选", value: adminUserQuery.keyword || "全部用户", desc: "支持按用户名做精确查询。" }
+    ];
+  }
+
+  if (tab.value === "adminConfig") {
+    return [
+      { label: "接口地址", value: configForm.baseUrl ? "已配置" : "未配置", desc: "模型请求的统一入口。" },
+      { label: "API Key", value: configForm.apiKey ? "已配置" : "未配置", desc: "敏感信息仍然通过后台统一维护。" },
+      { label: "当前模型", value: configForm.model || "-", desc: "用于简历生成与题库能力。" },
+      { label: "最近更新", value: formatCompactTime(configUpdatedAt.value), desc: "便于确认配置生效时间。" }
+    ];
+  }
+
+  if (tab.value === "adminData") {
+    const modelUsedCount = adminItems.value.filter((item) => item.modelUsed).length;
+    return [
+      { label: "当前加载", value: `${adminItems.value.length} 条`, desc: "当前页面已载入的客户简历记录。" },
+      { label: "平均评分", value: adminItems.value.length ? formatScore(averageScore(adminItems.value, "score")) : "-", desc: "基于当前列表的评分均值。" },
+      { label: "模型启用", value: `${modelUsedCount} 条`, desc: "显示模型参与分析的记录数量。" },
+      { label: "用户筛选", value: adminQuery.username || "全部用户", desc: "支持按用户名查看客户履历。" }
+    ];
+  }
+
+  if (tab.value === "adminKb") {
+    return [
+      { label: "文档数量", value: `${kbDocs.value.length} 份`, desc: "当前列表已加载的题库文档数量。" },
+      { label: "预览状态", value: kbViewer.visible ? "预览中" : "未打开", desc: "便于快速判断当前查看动作。" },
+      { label: "失败页面", value: `${kbCrawlErrors.value.length} 个`, desc: "爬取失败页面数会在这里汇总。" },
+      { label: "入库入口", value: "上传 / 爬取 / 生成", desc: "三种方式共用同一知识资产区域。" }
+    ];
+  }
+
+  return [
+    { label: "当前模式", value: currentAnalyzeMeta.value.label, desc: "按步骤完成分析、生成、对话和检测。" },
+    { label: "任务状态", value: queueJob.jobId ? statusText(queueJob.status) : "待提交", desc: "队列与分析状态持续反馈在主屏上。" },
+    { label: "当前结果", value: result.value?.analysisId ? `#${result.value.analysisId}` : "暂无结果", desc: "完成分析后即可进入后续工具链。" },
+    { label: "最新评分", value: result.value ? formatScore(result.value.score) : "-", desc: "用于快速判断当前岗位匹配度。" }
+  ];
+});
+
+const filteredMineItems = computed(() => {
+  const keyword = mineLocalKeyword.value.trim().toLowerCase();
+  if (!keyword) return mineItems.value;
+  return mineItems.value.filter((item) => {
+    const fields = [item.filename, item.targetRole, item.optimizedSummary]
+      .map((value) => String(value || "").toLowerCase());
+    return fields.some((value) => value.includes(keyword));
+  });
+});
+
+const mineStatItems = computed(() => {
+  const latest = mineItems.value[0];
+  return [
+    { label: "记录数", value: `${mineItems.value.length} 条` },
+    { label: "平均评分", value: mineItems.value.length ? formatScore(averageScore(mineItems.value, "score")) : "-" },
+    { label: "平均覆盖率", value: mineItems.value.length ? formatCoverage(averageScore(mineItems.value, "coverage")) : "-" },
+    { label: "最近岗位", value: latest?.targetRole || "-" }
+  ];
+});
+
+const adminUserStatItems = computed(() => {
+  const vipCount = adminUsers.value.filter((item) => item.vip).length;
+  const blacklistedCount = adminUsers.value.filter((item) => item.blacklisted).length;
+  const adminCount = adminUsers.value.filter((item) => (item.role || "").toUpperCase() === "ADMIN").length;
+  return [
+    { label: "当前用户", value: `${adminUsers.value.length} 人` },
+    { label: "VIP 用户", value: `${vipCount} 人` },
+    { label: "管理员", value: `${adminCount} 人` },
+    { label: "黑名单", value: `${blacklistedCount} 人` }
+  ];
+});
+
+const filteredKbDocs = computed(() => {
+  const keyword = kbLocalKeyword.value.trim().toLowerCase();
+  if (!keyword) return kbDocs.value;
+  return kbDocs.value.filter((item) => {
+    const fields = [item.title, item.filename, item.uploadedBy]
+      .map((value) => String(value || "").toLowerCase());
+    return fields.some((value) => value.includes(keyword));
+  });
+});
+
+const kbStatItems = computed(() => [
+  { label: "文档总数", value: `${kbDocs.value.length} 份` },
+  { label: "题目累计", value: `${sumField(kbDocs.value, "questionCount")} 题` },
+  { label: "失败页面", value: `${kbCrawlErrors.value.length} 个` },
+  { label: "当前预览", value: kbViewer.visible ? "已打开" : "未打开" }
+]);
 
 // 统一注入鉴权头，避免每个请求重复拼 Authorization
 function authHeaders(extra = {}) {
@@ -825,6 +1213,18 @@ function formatCoverage(value) {
   return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(2)}%`;
 }
 
+function averageScore(items, field) {
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) return 0;
+  const total = rows.reduce((sum, item) => sum + asNumber(item?.[field]), 0);
+  return total / rows.length;
+}
+
+function sumField(items, field) {
+  const rows = Array.isArray(items) ? items : [];
+  return rows.reduce((sum, item) => sum + asNumber(item?.[field]), 0);
+}
+
 // 将任务状态码转为中文文本
 function statusText(status) {
   const map = {
@@ -856,6 +1256,30 @@ function tabTitle(tabKey) {
     adminKb: "面试题库"
   };
   return map[tabKey] || "工作台";
+}
+
+async function openWorkspaceTab(tabKey) {
+  if (tabKey === "mine") {
+    await switchMine();
+    return;
+  }
+  if (tabKey === "adminUsers") {
+    await switchAdminUsers();
+    return;
+  }
+  if (tabKey === "adminConfig") {
+    await switchAdminConfig();
+    return;
+  }
+  if (tabKey === "adminData") {
+    await switchAdminData();
+    return;
+  }
+  if (tabKey === "adminKb") {
+    await switchAdminKb();
+    return;
+  }
+  tab.value = "analyze";
 }
 
 async function copyText(text) {
@@ -1755,6 +2179,13 @@ function formatTime(v) {
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return v;
   return d.toLocaleString();
+}
+
+function formatCompactTime(v) {
+  if (!v) return "-";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v;
+  return d.toLocaleDateString();
 }
 
 // 首屏进入时，若有 token 则自动恢复会话
