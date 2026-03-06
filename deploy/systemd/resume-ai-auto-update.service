@@ -1,0 +1,14 @@
+[Unit]
+Description=Resume AI auto update from GitHub
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/resume-ai-stack
+Environment=DEPLOY_REPO_URL=https://github.com/wwwkkkccc/AI-.git
+Environment=DEPLOY_BRANCH=main
+Environment=SOURCE_REPO_DIR=/opt/resume-ai-source
+Environment=APP_DIR=/opt/resume-ai-stack
+ExecStart=/opt/resume-ai-stack/scripts/ci/pull_deploy.sh
