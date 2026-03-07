@@ -1971,6 +1971,23 @@ async function openWorkspaceTab(tabKey) {
     await switchAdminKb();
     return;
   }
+  // 处理其他标签页：versions, stats, adminAudit, adminStats, adminTemplates
+  if (["versions", "stats", "adminAudit", "adminStats", "adminTemplates"].includes(tabKey)) {
+    tab.value = tabKey;
+    // 加载对应数据
+    if (tabKey === "versions") {
+      await loadVersions(0);
+    } else if (tabKey === "stats") {
+      await loadUserStats();
+    } else if (tabKey === "adminAudit") {
+      await loadAuditLogs(0);
+    } else if (tabKey === "adminStats") {
+      await loadAdminStats();
+    } else if (tabKey === "adminTemplates") {
+      await loadTemplates(0);
+    }
+    return;
+  }
   tab.value = "analyze";
 }
 
