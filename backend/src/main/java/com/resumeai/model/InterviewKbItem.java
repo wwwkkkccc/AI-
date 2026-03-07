@@ -39,6 +39,10 @@ public class InterviewKbItem {
     @Column(name = "keywords", length = 1200)
     private String keywords;
 
+    // 所属分类ID
+    @Column(name = "category_id")
+    private Long categoryId;
+
     // 记录创建时间
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -73,6 +77,14 @@ public class InterviewKbItem {
 
     public void setKeywords(String keywords) {
         this.keywords = keywords;
+    }
+
+    public Long getCategoryId() {
+        return categoryId;
+    }
+
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
     }
 
     public Instant getCreatedAt() {

@@ -14,13 +14,18 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
@@ -28,6 +33,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * 分析任务排队服务。
@@ -41,6 +47,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class AnalysisQueueService {
 
+    private static final Logger log = LoggerFactory.getLogger(AnalysisQueueService.class);
     private static final String QUEUE_KEY = "resume_ai:analysis:queue:zset";
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_PROCESSING = "PROCESSING";
@@ -48,6 +55,8 @@ public class AnalysisQueueService {
     private static final String STATUS_FAILED = "FAILED";
     // 普通用户的优先级偏移量，保证 VIP 用户（偏移为 0）始终排在前面
     private static final long NORMAL_PRIORITY_OFFSET = 1_000_000_000_000_000L;
+
+    private final Map<String, List<SseEmitter>> jobEmitters = new ConcurrentHashMap<>();
 
     private final StringRedisTemplate redisTemplate;
     private final AnalysisJobRepository analysisJobRepository;
@@ -242,6 +251,7 @@ public class AnalysisQueueService {
             job.setStartedAt(Instant.now());
             job.setErrorMessage(null);
             analysisJobRepository.save(job);
+            notifyEmitters(jobId, Map.of("status", STATUS_PROCESSING));
 
             UserAccount user = userAccountRepository.findById(job.getUserId())
                     .orElseThrow(() -> new IllegalArgumentException("user not found"));
@@ -254,13 +264,16 @@ public class AnalysisQueueService {
             job.setFinishedAt(Instant.now());
             job.setResultJson(objectMapper.writeValueAsString(result));
             analysisJobRepository.save(job);
+            notifyEmitters(jobId, Map.of("status", STATUS_DONE, "result", result));
         } catch (Exception ex) {
             job.setStatus(STATUS_FAILED);
             job.setFinishedAt(Instant.now());
             job.setErrorMessage(cut(clean(ex.getMessage()), 1000));
             analysisJobRepository.save(job);
+            notifyEmitters(jobId, Map.of("status", STATUS_FAILED, "error", clean(ex.getMessage())));
         } finally {
             cleanupJobFile(job);
+            completeEmitters(jobId);
         }
     }
 
@@ -321,6 +334,55 @@ public class AnalysisQueueService {
         if (value == null) return "";
         if (value.length() <= max) return value;
         return value.substring(0, max);
+    }
+
+    public void registerEmitter(String jobId, SseEmitter emitter) {
+        jobEmitters.computeIfAbsent(jobId, k -> new ArrayList<>()).add(emitter);
+        emitter.onCompletion(() -> removeEmitter(jobId, emitter));
+        emitter.onTimeout(() -> removeEmitter(jobId, emitter));
+        emitter.onError(e -> removeEmitter(jobId, emitter));
+    }
+
+    public void removeEmitter(String jobId, SseEmitter emitter) {
+        List<SseEmitter> emitters = jobEmitters.get(jobId);
+        if (emitters != null) {
+            emitters.remove(emitter);
+            if (emitters.isEmpty()) {
+                jobEmitters.remove(jobId);
+            }
+        }
+    }
+
+    private void notifyEmitters(String jobId, Map<String, Object> data) {
+        List<SseEmitter> emitters = jobEmitters.get(jobId);
+        if (emitters == null || emitters.isEmpty()) {
+            return;
+        }
+        List<SseEmitter> deadEmitters = new ArrayList<>();
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event().data(data));
+            } catch (Exception ex) {
+                log.warn("Failed to send SSE event for job {}: {}", jobId, ex.getMessage());
+                deadEmitters.add(emitter);
+            }
+        }
+        for (SseEmitter dead : deadEmitters) {
+            removeEmitter(jobId, dead);
+        }
+    }
+
+    private void completeEmitters(String jobId) {
+        List<SseEmitter> emitters = jobEmitters.remove(jobId);
+        if (emitters != null) {
+            for (SseEmitter emitter : emitters) {
+                try {
+                    emitter.complete();
+                } catch (Exception ignore) {
+                    // 尽力完成
+                }
+            }
+        }
     }
 
     @PreDestroy

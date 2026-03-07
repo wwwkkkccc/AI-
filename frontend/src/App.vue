@@ -254,6 +254,78 @@
             :can-run="!!result.analysisId"
             @run="runAuditFromCurrent"
           />
+
+          <MockInterviewGroup
+            v-if="analyzeSubtab === 'interview'"
+            :loading="interviewLoading"
+            :message="interviewMessage"
+            :interview-state="interviewState"
+            :format-score="formatScore"
+            @start="startInterview"
+            @answer="answerQuestion"
+            @end="endInterview"
+          />
+
+          <div v-if="analyzeSubtab === 'recommend'" class="sub-card">
+            <h3>岗位推荐</h3>
+            <p class="message">{{ recommendMessage }}</p>
+            <div class="input-field">
+              <textarea v-model.trim="recommendState.resumeText" rows="10" placeholder="粘贴简历文本" required></textarea>
+            </div>
+            <button @click="recommendJobs" :disabled="recommendLoading">
+              {{ recommendLoading ? '推荐中...' : '获取推荐岗位' }}
+            </button>
+            <div v-if="recommendState.recommendations.length" class="recommendations-list">
+              <h4>推荐结果</h4>
+              <div v-for="(rec, idx) in recommendState.recommendations" :key="idx" class="recommendation-item">
+                <h5>{{ rec.title }}</h5>
+                <p>{{ rec.company }}</p>
+                <p>匹配度：{{ formatScore(rec.matchScore) }}</p>
+                <p>{{ rec.description }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="analyzeSubtab === 'batch'" class="sub-card">
+            <h3>批量分析</h3>
+            <p class="message">{{ batchMessage }}</p>
+            <div class="input-field">
+              <label>选择多份简历文件</label>
+              <input type="file" multiple @change="batchState.files = Array.from($event.target.files)" />
+            </div>
+            <div class="input-field">
+              <label>岗位描述 JD（可选）</label>
+              <textarea v-model.trim="batchState.jdText" rows="4" placeholder="粘贴 JD 文本"></textarea>
+            </div>
+            <div class="input-field">
+              <label>目标岗位（可选）</label>
+              <input v-model.trim="batchState.targetRole" type="text" placeholder="例如：Java 高级后端工程师" />
+            </div>
+            <button @click="submitBatch" :disabled="batchLoading">
+              {{ batchLoading ? '提交中...' : '提交批量任务' }}
+            </button>
+            <div v-if="batchState.batchId" class="batch-status">
+              <h4>批量任务状态：{{ batchState.status }}</h4>
+              <div v-if="batchState.jobs.length" class="batch-jobs">
+                <table class="dense-table">
+                  <thead>
+                    <tr>
+                      <th>文件名</th>
+                      <th>状态</th>
+                      <th>评分</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="job in batchState.jobs" :key="job.jobId">
+                      <td>{{ job.filename }}</td>
+                      <td>{{ job.status }}</td>
+                      <td>{{ job.score != null ? formatScore(job.score) : '-' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
 
         <p v-if="analyzeSubtab !== 'analysis' && !result" class="message">
@@ -591,7 +663,7 @@
       </section>
 
       <!-- ===== 管理员 - 面试题库标签页 ===== -->
-      <section v-else class="card">
+      <section v-else-if="tab === 'adminKb'" class="card">
         <div class="panel-head">
           <div class="section-text">
             <span class="section-kicker">Knowledge Operations</span>
@@ -793,6 +865,321 @@
           </div>
         </section>
       </section>
+
+      <!-- ===== 简历版本管理标签页 ===== -->
+      <section v-else-if="tab === 'versions'" class="card">
+        <div class="panel-head">
+          <div class="section-text">
+            <span class="section-kicker">Version Control</span>
+            <h2>简历版本管理</h2>
+            <p>保存、对比不同版本的简历，追踪优化历程。</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost secondary" @click="loadVersions(versionsState.page)">刷新列表</button>
+            <button @click="versionsState.compareMode = !versionsState.compareMode">
+              {{ versionsState.compareMode ? '退出对比' : '版本对比' }}
+            </button>
+          </div>
+        </div>
+
+        <p class="message">{{ versionsMessage }}</p>
+
+        <div class="table-wrap">
+          <table class="dense-table">
+            <thead>
+              <tr>
+                <th v-if="versionsState.compareMode">选择</th>
+                <th>ID</th>
+                <th>版本名称</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!versionsState.items.length">
+                <td :colspan="versionsState.compareMode ? 5 : 4" class="table-empty">
+                  <strong>还没有保存的版本</strong>
+                  <span>在分析结果页保存简历版本后，这里会显示历史版本。</span>
+                </td>
+              </tr>
+              <tr v-for="item in versionsState.items" :key="item.id">
+                <td v-if="versionsState.compareMode">
+                  <input type="checkbox" :value="item.id"
+                    :checked="versionsState.compareId1 === item.id || versionsState.compareId2 === item.id"
+                    @change="toggleCompareVersion(item.id)" />
+                </td>
+                <td>#{{ item.id }}</td>
+                <td>{{ item.name }}</td>
+                <td>{{ formatTime(item.createdAt) }}</td>
+                <td>
+                  <button class="mini-btn" @click="versionsState.selectedVersion = item">查看</button>
+                  <button class="mini-btn warn" @click="deleteVersion(item.id)" :disabled="versionsLoading">删除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-if="versionsState.compareMode && versionsState.compareId1 && versionsState.compareId2" class="sub-card">
+          <button @click="compareVersions(versionsState.compareId1, versionsState.compareId2)" :disabled="versionsLoading">
+            执行对比
+          </button>
+          <div v-if="versionsState.compareResult" class="compare-result">
+            <h3>对比结果</h3>
+            <pre>{{ versionsState.compareResult }}</pre>
+          </div>
+        </div>
+
+        <div class="pagination-bar" v-if="versionsState.total > 0">
+          <button :disabled="versionsState.page === 0" @click="loadVersions(versionsState.page - 1)">上一页</button>
+          <span>第 {{ versionsState.page + 1 }} / {{ versionsState.totalPages }} 页</span>
+          <button :disabled="versionsState.page >= versionsState.totalPages - 1" @click="loadVersions(versionsState.page + 1)">下一页</button>
+          <span>共 {{ versionsState.total }} 条</span>
+        </div>
+      </section>
+
+      <!-- ===== 数据统计标签页 ===== -->
+      <section v-else-if="tab === 'stats'" class="card">
+        <div class="panel-head">
+          <div class="section-text">
+            <span class="section-kicker">Analytics</span>
+            <h2>数据统计</h2>
+            <p>查看个人分析历史、评分趋势与关键词匹配情况。</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost secondary" @click="loadUserStats">刷新数据</button>
+          </div>
+        </div>
+
+        <p class="message">{{ userStatsMessage }}</p>
+
+        <div class="stat-strip">
+          <article class="stat-chip">
+            <span>总分析数</span>
+            <strong>{{ userStatsState.totalAnalyses }} 次</strong>
+          </article>
+          <article class="stat-chip">
+            <span>平均评分</span>
+            <strong>{{ formatScore(userStatsState.avgScore) }}</strong>
+          </article>
+        </div>
+
+        <div class="sub-card">
+          <h3>评分历史趋势</h3>
+          <div v-if="userStatsState.scoreHistory.length" class="chart-placeholder">
+            <p v-for="(item, idx) in userStatsState.scoreHistory" :key="idx">
+              {{ formatCompactTime(item.date) }}: {{ formatScore(item.score) }}
+            </p>
+          </div>
+          <p v-else>暂无评分历史数据</p>
+        </div>
+
+        <div class="sub-card">
+          <h3>高频匹配关键词</h3>
+          <div v-if="userStatsState.topMatchedKeywords.length">
+            <span v-for="kw in userStatsState.topMatchedKeywords" :key="kw" class="keyword-tag">{{ kw }}</span>
+          </div>
+          <p v-else>暂无数据</p>
+        </div>
+
+        <div class="sub-card">
+          <h3>常见缺失关键词</h3>
+          <div v-if="userStatsState.topMissingKeywords.length">
+            <span v-for="kw in userStatsState.topMissingKeywords" :key="kw" class="keyword-tag warn">{{ kw }}</span>
+          </div>
+          <p v-else>暂无数据</p>
+        </div>
+      </section>
+
+      <!-- ===== 管理员 - 操作日志标签页 ===== -->
+      <section v-else-if="tab === 'adminAudit'" class="card">
+        <div class="panel-head">
+          <div class="section-text">
+            <span class="section-kicker">Audit Trail</span>
+            <h2>管理员 - 操作日志</h2>
+            <p>追踪管理员操作记录，确保系统安全与合规。</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost secondary" @click="loadAuditLogs(auditLogsState.page)">刷新日志</button>
+          </div>
+        </div>
+
+        <p class="message">{{ auditLogsMessage }}</p>
+
+        <div class="toolbar-shell">
+          <div class="toolbar-search">
+            <input v-model.trim="auditLogsState.filters.action" type="text" placeholder="操作类型" />
+            <input v-model.trim="auditLogsState.filters.adminUsername" type="text" placeholder="管理员用户名" />
+            <input v-model.trim="auditLogsState.filters.from" type="date" placeholder="开始日期" />
+            <input v-model.trim="auditLogsState.filters.to" type="date" placeholder="结束日期" />
+            <button @click="auditLogsState.page = 0; loadAuditLogs(0)">搜索</button>
+            <button class="ghost secondary" @click="auditLogsState.filters = { action: '', adminUsername: '', from: '', to: '' }; loadAuditLogs(0)">清空</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="dense-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>操作</th>
+                <th>管理员</th>
+                <th>目标</th>
+                <th>详情</th>
+                <th>时间</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!auditLogsState.items.length">
+                <td colspan="6" class="table-empty">
+                  <strong>暂无审计日志</strong>
+                </td>
+              </tr>
+              <tr v-for="item in auditLogsState.items" :key="item.id">
+                <td>#{{ item.id }}</td>
+                <td>{{ item.action }}</td>
+                <td>{{ item.adminUsername }}</td>
+                <td>{{ item.targetType }} #{{ item.targetId }}</td>
+                <td>{{ item.details || '-' }}</td>
+                <td>{{ formatTime(item.createdAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination-bar" v-if="auditLogsState.total > 0">
+          <button :disabled="auditLogsState.page === 0" @click="loadAuditLogs(auditLogsState.page - 1)">上一页</button>
+          <span>第 {{ auditLogsState.page + 1 }} 页</span>
+          <button :disabled="(auditLogsState.page + 1) * auditLogsState.size >= auditLogsState.total" @click="loadAuditLogs(auditLogsState.page + 1)">下一页</button>
+          <span>共 {{ auditLogsState.total }} 条</span>
+        </div>
+      </section>
+
+      <!-- ===== 管理员 - 系统统计标签页 ===== -->
+      <section v-else-if="tab === 'adminStats'" class="card">
+        <div class="panel-head">
+          <div class="section-text">
+            <span class="section-kicker">System Analytics</span>
+            <h2>管理员 - 系统统计</h2>
+            <p>查看系统整体运行数据、用户活跃度与分析趋势。</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost secondary" @click="loadAdminStats">刷新数据</button>
+          </div>
+        </div>
+
+        <p class="message">{{ adminStatsMessage }}</p>
+
+        <div class="stat-strip">
+          <article class="stat-chip">
+            <span>总用户数</span>
+            <strong>{{ adminStatsState.totalUsers }} 人</strong>
+          </article>
+          <article class="stat-chip">
+            <span>活跃用户</span>
+            <strong>{{ adminStatsState.activeUsers }} 人</strong>
+          </article>
+          <article class="stat-chip">
+            <span>总分析数</span>
+            <strong>{{ adminStatsState.totalAnalyses }} 次</strong>
+          </article>
+          <article class="stat-chip">
+            <span>平均评分</span>
+            <strong>{{ formatScore(adminStatsState.avgScore) }}</strong>
+          </article>
+        </div>
+
+        <div class="sub-card">
+          <h3>每日分析量</h3>
+          <div v-if="adminStatsState.dailyAnalysisCounts.length" class="chart-placeholder">
+            <p v-for="(item, idx) in adminStatsState.dailyAnalysisCounts" :key="idx">
+              {{ item.date }}: {{ item.count }} 次
+            </p>
+          </div>
+          <p v-else>暂无数据</p>
+        </div>
+
+        <div class="sub-card">
+          <h3>热门岗位</h3>
+          <div v-if="adminStatsState.popularRoles.length">
+            <p v-for="(item, idx) in adminStatsState.popularRoles" :key="idx">
+              {{ item.role }}: {{ item.count }} 次
+            </p>
+          </div>
+          <p v-else>暂无数据</p>
+        </div>
+      </section>
+
+      <!-- ===== 管理员 - 模板管理标签页 ===== -->
+      <section v-else-if="tab === 'adminTemplates'" class="card">
+        <div class="panel-head">
+          <div class="section-text">
+            <span class="section-kicker">Template Library</span>
+            <h2>管理员 - 模板管理</h2>
+            <p>创建、编辑和管理简历模板库，提升用户体验。</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost secondary" @click="loadTemplates(templatesState.page)">刷新列表</button>
+            <button @click="templatesState.editingTemplate = { name: '', content: '', category: '' }">新建模板</button>
+          </div>
+        </div>
+
+        <p class="message">{{ templatesMessage }}</p>
+
+        <div v-if="templatesState.editingTemplate" class="sub-card">
+          <h3>{{ templatesState.editingTemplate.id ? '编辑模板' : '新建模板' }}</h3>
+          <div class="input-field">
+            <input v-model.trim="templatesState.editingTemplate.name" type="text" placeholder="模板名称" required />
+          </div>
+          <div class="input-field">
+            <input v-model.trim="templatesState.editingTemplate.category" type="text" placeholder="分类" />
+          </div>
+          <div class="input-field">
+            <textarea v-model.trim="templatesState.editingTemplate.content" rows="10" placeholder="模板内容" required></textarea>
+          </div>
+          <button @click="saveTemplate" :disabled="templatesLoading">保存</button>
+          <button class="ghost secondary" @click="templatesState.editingTemplate = null">取消</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="dense-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>名称</th>
+                <th>分类</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!templatesState.items.length">
+                <td colspan="5" class="table-empty">
+                  <strong>还没有模板</strong>
+                  <span>点击"新建模板"创建第一个模板。</span>
+                </td>
+              </tr>
+              <tr v-for="item in templatesState.items" :key="item.id">
+                <td>#{{ item.id }}</td>
+                <td>{{ item.name }}</td>
+                <td>{{ item.category || '-' }}</td>
+                <td>{{ formatTime(item.createdAt) }}</td>
+                <td>
+                  <button class="mini-btn" @click="templatesState.editingTemplate = { ...item }">编辑</button>
+                  <button class="mini-btn warn" @click="deleteTemplate(item.id)" :disabled="templatesLoading">删除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination-bar" v-if="templatesState.total > 0">
+          <button :disabled="templatesState.page === 0" @click="loadTemplates(templatesState.page - 1)">上一页</button>
+          <span>第 {{ templatesState.page + 1 }} 页</span>
+          <button :disabled="(templatesState.page + 1) * templatesState.size >= templatesState.total" @click="loadTemplates(templatesState.page + 1)">下一页</button>
+          <span>共 {{ templatesState.total }} 条</span>
+        </div>
+      </section>
         </main>
       </div>
     </template>
@@ -808,6 +1195,7 @@ const JdRadarGroup = defineAsyncComponent(() => import("./components/analyze/JdR
 const ResumeAuditGroup = defineAsyncComponent(() => import("./components/analyze/ResumeAuditGroup.vue"));
 const ResumeChatGroup = defineAsyncComponent(() => import("./components/analyze/ResumeChatGroup.vue"));
 const ResumeGeneratorGroup = defineAsyncComponent(() => import("./components/analyze/ResumeGeneratorGroup.vue"));
+const MockInterviewGroup = defineAsyncComponent(() => import("./components/analyze/MockInterviewGroup.vue"));
 
 // ===== 基础配置 =====
 const apiBase = "./api";           // API 请求基础路径（相对路径，由 Nginx 代理到后端）
@@ -870,6 +1258,118 @@ const jdRadar = ref(null);
 const auditLoading = ref(false);
 const auditMessage = ref("");
 const resumeAudit = ref(null);
+
+// ===== AI 模拟面试 =====
+const interviewLoading = ref(false);
+const interviewMessage = ref("");
+const interviewState = reactive({
+  sessionId: null,
+  targetRole: "",
+  status: "ACTIVE",
+  questionCount: 0,
+  totalScore: null,
+  messages: [],
+  report: null,
+  form: { targetRole: "", resumeText: "", jdText: "" },
+  input: ""
+});
+const interviewSessions = ref([]);
+const interviewSessionsPage = ref(0);
+const interviewSessionsSize = ref(10);
+const interviewSessionsTotal = ref(0);
+
+// ===== 简历版本管理 =====
+const versionsLoading = ref(false);
+const versionsMessage = ref("");
+const versionsState = reactive({
+  items: [],
+  page: 0,
+  size: 20,
+  total: 0,
+  totalPages: 0,
+  selectedVersion: null,
+  compareMode: false,
+  compareId1: null,
+  compareId2: null,
+  compareResult: null
+});
+
+// ===== 简历模板管理 =====
+const templatesLoading = ref(false);
+const templatesMessage = ref("");
+const templatesState = reactive({
+  items: [],
+  page: 0,
+  size: 20,
+  total: 0,
+  selectedTemplate: null,
+  editingTemplate: null
+});
+
+// ===== 用户统计数据 =====
+const userStatsLoading = ref(false);
+const userStatsMessage = ref("");
+const userStatsState = reactive({
+  totalAnalyses: 0,
+  avgScore: 0,
+  scoreHistory: [],
+  topMatchedKeywords: [],
+  topMissingKeywords: []
+});
+
+// ===== 管理员统计数据 =====
+const adminStatsLoading = ref(false);
+const adminStatsMessage = ref("");
+const adminStatsState = reactive({
+  totalUsers: 0,
+  activeUsers: 0,
+  totalAnalyses: 0,
+  avgScore: 0,
+  dailyAnalysisCounts: [],
+  popularRoles: []
+});
+
+// ===== 审计日志 =====
+const auditLogsLoading = ref(false);
+const auditLogsMessage = ref("");
+const auditLogsState = reactive({
+  items: [],
+  page: 0,
+  size: 20,
+  total: 0,
+  filters: { action: "", adminUsername: "", from: "", to: "" }
+});
+
+// ===== 岗位推荐 =====
+const recommendLoading = ref(false);
+const recommendMessage = ref("");
+const recommendState = reactive({
+  resumeText: "",
+  recommendations: [],
+  loading: false
+});
+
+// ===== 批量分析 =====
+const batchLoading = ref(false);
+const batchMessage = ref("");
+const batchState = reactive({
+  batchId: null,
+  files: [],
+  jdText: "",
+  targetRole: "",
+  status: null,
+  jobs: []
+});
+
+// ===== 隐私脱敏 =====
+const redactionLoading = ref(false);
+const redactionMessage = ref("");
+const redactionState = reactive({
+  originalText: "",
+  redactedText: "",
+  redactedCount: 0,
+  redactedItems: []
+});
 
 const queueJob = reactive({        // 当前排队任务状态
   jobId: "",                       // 任务 ID
@@ -997,20 +1497,28 @@ const analyzeTabItems = [
   { key: "generate", label: "生成 / 重写", desc: "按 JD 或分析结果生成简历" },
   { key: "chat", label: "优化对话", desc: "围绕结果做多轮追问与润色" },
   { key: "radar", label: "JD 雷达图", desc: "查看岗位维度匹配度分布" },
-  { key: "audit", label: "真实性检测", desc: "识别夸大和风险表达" }
+  { key: "audit", label: "真实性检测", desc: "识别夸大和风险表达" },
+  { key: "interview", label: "AI 模拟面试", desc: "基于简历进行模拟面试" },
+  { key: "recommend", label: "岗位推荐", desc: "根据简历推荐匹配岗位" },
+  { key: "batch", label: "批量分析", desc: "批量处理多份简历" }
 ];
 
 const workspaceNavItems = computed(() => {
   const items = [
     { key: "analyze", badge: "AI", label: "简历分析", desc: "提交任务、查看结果、继续优化" },
-    { key: "mine", badge: "ME", label: "我的记录", desc: "回看历史分析与重点建议" }
+    { key: "mine", badge: "ME", label: "我的记录", desc: "回看历史分析与重点建议" },
+    { key: "versions", badge: "VER", label: "版本管理", desc: "管理简历版本与对比" },
+    { key: "stats", badge: "STA", label: "数据统计", desc: "查看个人分析统计数据" }
   ];
   if (isAdmin.value) {
     items.push(
       { key: "adminUsers", badge: "USR", label: "用户管理", desc: "统一维护账号、VIP 与黑名单" },
       { key: "adminConfig", badge: "CFG", label: "模型配置", desc: "配置模型地址、密钥与名称" },
       { key: "adminData", badge: "DB", label: "客户简历", desc: "检索履历数据与模型使用情况" },
-      { key: "adminKb", badge: "KB", label: "面试题库", desc: "上传、抓取或生成知识资产" }
+      { key: "adminKb", badge: "KB", label: "面试题库", desc: "上传、抓取或生成知识资产" },
+      { key: "adminAudit", badge: "LOG", label: "操作日志", desc: "查看管理员操作审计日志" },
+      { key: "adminStats", badge: "SYS", label: "系统统计", desc: "查看系统整体统计数据" },
+      { key: "adminTemplates", badge: "TPL", label: "模板管理", desc: "管理简历模板库" }
     );
   }
   return items;
@@ -1029,6 +1537,18 @@ const currentTabMeta = computed(() => {
       title: "我的记录",
       description: "按时间回看历史分析结果，快速提炼最有价值的修改建议。",
       tag: "个人资产"
+    },
+    versions: {
+      kicker: "Version Control",
+      title: "版本管理",
+      description: "保存、对比不同版本的简历，追踪优化历程。",
+      tag: "版本追踪"
+    },
+    stats: {
+      kicker: "Analytics",
+      title: "数据统计",
+      description: "查看个人分析历史、评分趋势与关键词匹配情况。",
+      tag: "数据洞察"
     },
     adminUsers: {
       kicker: "Administration",
@@ -1053,6 +1573,24 @@ const currentTabMeta = computed(() => {
       title: "面试题库",
       description: "通过上传、抓取与模型生成三种入口构建长期可复用的题库资产。",
       tag: "知识资产"
+    },
+    adminAudit: {
+      kicker: "Audit Trail",
+      title: "操作日志",
+      description: "追踪管理员操作记录，确保系统安全与合规。",
+      tag: "审计追踪"
+    },
+    adminStats: {
+      kicker: "System Analytics",
+      title: "系统统计",
+      description: "查看系统整体运行数据、用户活跃度与分析趋势。",
+      tag: "系统洞察"
+    },
+    adminTemplates: {
+      kicker: "Template Library",
+      title: "模板管理",
+      description: "创建、编辑和管理简历模板库，提升用户体验。",
+      tag: "模板库"
     }
   };
   return map[tab.value] || map.analyze;
@@ -1113,6 +1651,51 @@ const overviewStats = computed(() => {
       { label: "预览状态", value: kbViewer.visible ? "预览中" : "未打开", desc: "便于快速判断当前查看动作。" },
       { label: "失败页面", value: `${kbCrawlErrors.value.length} 个`, desc: "爬取失败页面数会在这里汇总。" },
       { label: "入库入口", value: "上传 / 爬取 / 生成", desc: "三种方式共用同一知识资产区域。" }
+    ];
+  }
+
+  if (tab.value === "versions") {
+    return [
+      { label: "版本总数", value: `${versionsState.total} 个`, desc: "已保存的简历版本总数。" },
+      { label: "当前加载", value: `${versionsState.items.length} 个`, desc: "当前页面已加载的版本数量。" },
+      { label: "对比模式", value: versionsState.compareMode ? "已开启" : "未开启", desc: "版本对比功能状态。" },
+      { label: "选中版本", value: versionsState.selectedVersion ? `#${versionsState.selectedVersion.id}` : "-", desc: "当前查看的版本。" }
+    ];
+  }
+
+  if (tab.value === "stats") {
+    return [
+      { label: "总分析数", value: `${userStatsState.totalAnalyses} 次`, desc: "累计分析次数。" },
+      { label: "平均评分", value: formatScore(userStatsState.avgScore), desc: "所有分析的平均得分。" },
+      { label: "高频关键词", value: `${userStatsState.topMatchedKeywords.length} 个`, desc: "最常匹配的关键词数量。" },
+      { label: "缺失关键词", value: `${userStatsState.topMissingKeywords.length} 个`, desc: "最常缺失的关键词数量。" }
+    ];
+  }
+
+  if (tab.value === "adminAudit") {
+    return [
+      { label: "日志总数", value: `${auditLogsState.total} 条`, desc: "审计日志总记录数。" },
+      { label: "当前加载", value: `${auditLogsState.items.length} 条`, desc: "当前页面已加载的日志数量。" },
+      { label: "操作筛选", value: auditLogsState.filters.action || "全部操作", desc: "当前筛选的操作类型。" },
+      { label: "管理员筛选", value: auditLogsState.filters.adminUsername || "全部管理员", desc: "当前筛选的管理员。" }
+    ];
+  }
+
+  if (tab.value === "adminStats") {
+    return [
+      { label: "总用户数", value: `${adminStatsState.totalUsers} 人`, desc: "系统注册用户总数。" },
+      { label: "活跃用户", value: `${adminStatsState.activeUsers} 人`, desc: "近期活跃用户数量。" },
+      { label: "总分析数", value: `${adminStatsState.totalAnalyses} 次`, desc: "系统累计分析次数。" },
+      { label: "平均评分", value: formatScore(adminStatsState.avgScore), desc: "系统整体平均得分。" }
+    ];
+  }
+
+  if (tab.value === "adminTemplates") {
+    return [
+      { label: "模板总数", value: `${templatesState.total} 个`, desc: "系统模板库总数。" },
+      { label: "当前加载", value: `${templatesState.items.length} 个`, desc: "当前页面已加载的模板数量。" },
+      { label: "选中模板", value: templatesState.selectedTemplate ? templatesState.selectedTemplate.name : "-", desc: "当前查看的模板。" },
+      { label: "编辑状态", value: templatesState.editingTemplate ? "编辑中" : "未编辑", desc: "模板编辑状态。" }
     ];
   }
 
@@ -2284,6 +2867,445 @@ async function switchAdminKb() {
   tab.value = "adminKb";
   await loadKbDocs();
   await loadLlmDefaultsFromConfig();
+}
+
+// ===== AI 模拟面试相关函数 =====
+async function startInterview() {
+  if (!interviewState.form.targetRole) {
+    interviewMessage.value = "请填写目标岗位";
+    return;
+  }
+  interviewLoading.value = true;
+  interviewMessage.value = "";
+  try {
+    const payload = {
+      targetRole: interviewState.form.targetRole,
+      resumeText: interviewState.form.resumeText || "",
+      jdText: interviewState.form.jdText || ""
+    };
+    const data = await apiRequest("/interview/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    interviewState.sessionId = data.sessionId;
+    interviewState.targetRole = data.targetRole;
+    interviewState.status = data.status;
+    interviewState.questionCount = data.questionCount || 0;
+    interviewState.totalScore = data.totalScore;
+    interviewState.messages = [];
+    await loadInterviewMessages(data.sessionId);
+    interviewMessage.value = "面试已开始";
+  } catch (err) {
+    interviewMessage.value = toZhMessage(err.message || "开始面试失败");
+  } finally {
+    interviewLoading.value = false;
+  }
+}
+
+async function answerQuestion() {
+  if (!interviewState.input.trim()) {
+    interviewMessage.value = "请输入回答内容";
+    return;
+  }
+  interviewLoading.value = true;
+  interviewMessage.value = "";
+  try {
+    const payload = { answer: interviewState.input };
+    const data = await apiRequest(`/interview/${interviewState.sessionId}/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    interviewState.input = "";
+    await loadInterviewMessages(interviewState.sessionId);
+    interviewState.questionCount = data.questionCount || interviewState.questionCount;
+    interviewState.totalScore = data.totalScore;
+  } catch (err) {
+    interviewMessage.value = toZhMessage(err.message || "提交回答失败");
+  } finally {
+    interviewLoading.value = false;
+  }
+}
+
+async function endInterview() {
+  interviewLoading.value = true;
+  interviewMessage.value = "";
+  try {
+    const data = await apiRequest(`/interview/${interviewState.sessionId}/end`, { method: "POST" });
+    interviewState.status = data.status;
+    interviewState.report = data.report;
+    interviewMessage.value = "面试已结束";
+  } catch (err) {
+    interviewMessage.value = toZhMessage(err.message || "结束面试失败");
+  } finally {
+    interviewLoading.value = false;
+  }
+}
+
+async function loadInterviewMessages(sessionId) {
+  try {
+    const data = await apiRequest(`/interview/${sessionId}/messages`);
+    interviewState.messages = data.messages || [];
+  } catch (err) {
+    interviewMessage.value = toZhMessage(err.message || "加载消息失败");
+  }
+}
+
+async function loadInterviewSessions(page = 0) {
+  interviewLoading.value = true;
+  try {
+    const data = await apiRequest(`/interview/sessions?page=${page}&size=${interviewSessionsSize.value}`);
+    interviewSessions.value = data.content || [];
+    interviewSessionsPage.value = data.page || 0;
+    interviewSessionsTotal.value = data.total || 0;
+  } catch (err) {
+    interviewMessage.value = toZhMessage(err.message || "加载面试记录失败");
+  } finally {
+    interviewLoading.value = false;
+  }
+}
+
+// ===== 简历版本管理相关函数 =====
+async function loadVersions(page = 0) {
+  versionsLoading.value = true;
+  versionsMessage.value = "";
+  try {
+    const data = await apiRequest(`/versions?page=${page}&size=${versionsState.size}`);
+    versionsState.items = data.content || [];
+    versionsState.page = data.page || 0;
+    versionsState.total = data.total || 0;
+    versionsState.totalPages = data.totalPages || 0;
+  } catch (err) {
+    versionsMessage.value = toZhMessage(err.message || "加载版本列表失败");
+  } finally {
+    versionsLoading.value = false;
+  }
+}
+
+async function saveVersion(name, content) {
+  versionsLoading.value = true;
+  versionsMessage.value = "";
+  try {
+    const payload = { name, content };
+    await apiRequest("/versions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    versionsMessage.value = "版本保存成功";
+    await loadVersions(versionsState.page);
+  } catch (err) {
+    versionsMessage.value = toZhMessage(err.message || "保存版本失败");
+  } finally {
+    versionsLoading.value = false;
+  }
+}
+
+async function deleteVersion(versionId) {
+  versionsLoading.value = true;
+  versionsMessage.value = "";
+  try {
+    await apiRequest(`/versions/${versionId}`, { method: "DELETE" });
+    versionsMessage.value = "版本已删除";
+    await loadVersions(versionsState.page);
+  } catch (err) {
+    versionsMessage.value = toZhMessage(err.message || "删除版本失败");
+  } finally {
+    versionsLoading.value = false;
+  }
+}
+
+async function compareVersions(id1, id2) {
+  versionsLoading.value = true;
+  versionsMessage.value = "";
+  try {
+    const data = await apiRequest(`/versions/compare?id1=${id1}&id2=${id2}`);
+    versionsState.compareResult = data;
+    versionsMessage.value = "对比完成";
+  } catch (err) {
+    versionsMessage.value = toZhMessage(err.message || "版本对比失败");
+  } finally {
+    versionsLoading.value = false;
+  }
+}
+
+// ===== 简历模板管理相关函数 =====
+async function loadTemplates(page = 0) {
+  templatesLoading.value = true;
+  templatesMessage.value = "";
+  try {
+    const data = await apiRequest(`/admin/templates?page=${page}&size=${templatesState.size}`);
+    templatesState.items = data.content || [];
+    templatesState.page = data.page || 0;
+    templatesState.total = data.total || 0;
+  } catch (err) {
+    templatesMessage.value = toZhMessage(err.message || "加载模板列表失败");
+  } finally {
+    templatesLoading.value = false;
+  }
+}
+
+async function createTemplate(template) {
+  templatesLoading.value = true;
+  templatesMessage.value = "";
+  try {
+    await apiRequest("/admin/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(template)
+    });
+    templatesMessage.value = "模板创建成功";
+    await loadTemplates(templatesState.page);
+  } catch (err) {
+    templatesMessage.value = toZhMessage(err.message || "创建模板失败");
+  } finally {
+    templatesLoading.value = false;
+  }
+}
+
+async function updateTemplate(templateId, template) {
+  templatesLoading.value = true;
+  templatesMessage.value = "";
+  try {
+    await apiRequest(`/admin/templates/${templateId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(template)
+    });
+    templatesMessage.value = "模板更新成功";
+    await loadTemplates(templatesState.page);
+  } catch (err) {
+    templatesMessage.value = toZhMessage(err.message || "更新模板失败");
+  } finally {
+    templatesLoading.value = false;
+  }
+}
+
+async function deleteTemplate(templateId) {
+  templatesLoading.value = true;
+  templatesMessage.value = "";
+  try {
+    await apiRequest(`/admin/templates/${templateId}`, { method: "DELETE" });
+    templatesMessage.value = "模板已删除";
+    await loadTemplates(templatesState.page);
+  } catch (err) {
+    templatesMessage.value = toZhMessage(err.message || "删除模板失败");
+  } finally {
+    templatesLoading.value = false;
+  }
+}
+
+async function applyTemplate(templateId) {
+  templatesLoading.value = true;
+  templatesMessage.value = "";
+  try {
+    const data = await apiRequest(`/templates/${templateId}/apply`);
+    templatesMessage.value = "模板应用成功";
+    return data;
+  } catch (err) {
+    templatesMessage.value = toZhMessage(err.message || "应用模板失败");
+    return null;
+  } finally {
+    templatesLoading.value = false;
+  }
+}
+
+// ===== 统计数据相关函数 =====
+async function loadUserStats() {
+  userStatsLoading.value = true;
+  userStatsMessage.value = "";
+  try {
+    const data = await apiRequest("/stats/user");
+    Object.assign(userStatsState, data);
+  } catch (err) {
+    userStatsMessage.value = toZhMessage(err.message || "加载统计数据失败");
+  } finally {
+    userStatsLoading.value = false;
+  }
+}
+
+async function loadAdminStats() {
+  adminStatsLoading.value = true;
+  adminStatsMessage.value = "";
+  try {
+    const data = await apiRequest("/admin/stats");
+    Object.assign(adminStatsState, data);
+  } catch (err) {
+    adminStatsMessage.value = toZhMessage(err.message || "加载系统统计失败");
+  } finally {
+    adminStatsLoading.value = false;
+  }
+}
+
+// ===== 审计日志相关函数 =====
+async function loadAuditLogs(page = 0) {
+  auditLogsLoading.value = true;
+  auditLogsMessage.value = "";
+  try {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: auditLogsState.size.toString()
+    });
+    if (auditLogsState.filters.action) params.append("action", auditLogsState.filters.action);
+    if (auditLogsState.filters.adminUsername) params.append("adminUsername", auditLogsState.filters.adminUsername);
+    if (auditLogsState.filters.from) params.append("from", auditLogsState.filters.from);
+    if (auditLogsState.filters.to) params.append("to", auditLogsState.filters.to);
+
+    const data = await apiRequest(`/admin/audit-logs?${params.toString()}`);
+    auditLogsState.items = data.content || [];
+    auditLogsState.page = data.page || 0;
+    auditLogsState.total = data.total || 0;
+  } catch (err) {
+    auditLogsMessage.value = toZhMessage(err.message || "加载审计日志失败");
+  } finally {
+    auditLogsLoading.value = false;
+  }
+}
+
+// ===== 岗位推荐相关函数 =====
+async function recommendJobs() {
+  if (!recommendState.resumeText.trim()) {
+    recommendMessage.value = "请输入简历内容";
+    return;
+  }
+  recommendLoading.value = true;
+  recommendMessage.value = "";
+  try {
+    const payload = { resumeText: recommendState.resumeText };
+    const data = await apiRequest("/recommend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    recommendState.recommendations = data.recommendations || [];
+    recommendMessage.value = `找到 ${recommendState.recommendations.length} 个推荐岗位`;
+  } catch (err) {
+    recommendMessage.value = toZhMessage(err.message || "岗位推荐失败");
+  } finally {
+    recommendLoading.value = false;
+  }
+}
+
+// ===== 批量分析相关函数 =====
+async function submitBatch() {
+  if (!batchState.files.length) {
+    batchMessage.value = "请选择至少一份简历文件";
+    return;
+  }
+  batchLoading.value = true;
+  batchMessage.value = "";
+  try {
+    const fd = new FormData();
+    batchState.files.forEach((file) => fd.append("files", file));
+    fd.append("jdText", batchState.jdText || "");
+    fd.append("targetRole", batchState.targetRole || "");
+
+    const data = await apiRequest("/analyze/batch", {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd
+    });
+    batchState.batchId = data.batchId;
+    batchState.status = data.status;
+    batchMessage.value = "批量任务已提交";
+    await loadBatchStatus(data.batchId);
+  } catch (err) {
+    batchMessage.value = toZhMessage(err.message || "提交批量任务失败");
+  } finally {
+    batchLoading.value = false;
+  }
+}
+
+async function loadBatchStatus(batchId) {
+  try {
+    const data = await apiRequest(`/analyze/batch/${batchId}`);
+    batchState.status = data.status;
+    batchState.jobs = data.jobs || [];
+  } catch (err) {
+    batchMessage.value = toZhMessage(err.message || "加载批量任务状态失败");
+  }
+}
+
+// ===== 隐私脱敏相关函数 =====
+async function redactPrivacy() {
+  if (!redactionState.originalText.trim()) {
+    redactionMessage.value = "请输入需要脱敏的文本";
+    return;
+  }
+  redactionLoading.value = true;
+  redactionMessage.value = "";
+  try {
+    const payload = { text: redactionState.originalText };
+    const data = await apiRequest("/privacy/redact", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    redactionState.redactedText = data.redactedText;
+    redactionState.redactedCount = data.redactedCount || 0;
+    redactionState.redactedItems = data.redactedItems || [];
+    redactionMessage.value = `已脱敏 ${redactionState.redactedCount} 处敏感信息`;
+  } catch (err) {
+    redactionMessage.value = toZhMessage(err.message || "隐私脱敏失败");
+  } finally {
+    redactionLoading.value = false;
+  }
+}
+
+// ===== 标签页切换函数 =====
+async function switchVersions() {
+  tab.value = "versions";
+  await loadVersions();
+}
+
+async function switchStats() {
+  tab.value = "stats";
+  await loadUserStats();
+}
+
+async function switchAdminAudit() {
+  tab.value = "adminAudit";
+  await loadAuditLogs();
+}
+
+async function switchAdminStats() {
+  tab.value = "adminStats";
+  await loadAdminStats();
+}
+
+async function switchAdminTemplates() {
+  tab.value = "adminTemplates";
+  await loadTemplates();
+}
+
+// ===== 辅助函数 =====
+function toggleCompareVersion(versionId) {
+  if (versionsState.compareId1 === versionId) {
+    versionsState.compareId1 = null;
+  } else if (versionsState.compareId2 === versionId) {
+    versionsState.compareId2 = null;
+  } else if (!versionsState.compareId1) {
+    versionsState.compareId1 = versionId;
+  } else if (!versionsState.compareId2) {
+    versionsState.compareId2 = versionId;
+  } else {
+    versionsState.compareId1 = versionId;
+    versionsState.compareId2 = null;
+  }
+}
+
+async function saveTemplate() {
+  if (!templatesState.editingTemplate.name || !templatesState.editingTemplate.content) {
+    templatesMessage.value = "请填写模板名称和内容";
+    return;
+  }
+  if (templatesState.editingTemplate.id) {
+    await updateTemplate(templatesState.editingTemplate.id, templatesState.editingTemplate);
+  } else {
+    await createTemplate(templatesState.editingTemplate);
+  }
+  templatesState.editingTemplate = null;
 }
 
 // 后端返回 ISO 时间，本地统一格式化成浏览器可读时间

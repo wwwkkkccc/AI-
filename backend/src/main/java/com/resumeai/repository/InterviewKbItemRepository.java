@@ -16,6 +16,9 @@ public interface InterviewKbItemRepository extends JpaRepository<InterviewKbItem
     // 根据文档ID分页查询面试题，按ID正序
     Page<InterviewKbItem> findByDocIdOrderByIdAsc(Long docId, Pageable pageable);
 
+    // 根据分类ID分页查询面试题，按ID正序
+    Page<InterviewKbItem> findByCategoryIdOrderByIdAsc(Long categoryId, Pageable pageable);
+
     // 根据文档ID删除该文档下的所有面试题
     void deleteByDocId(Long docId);
 }

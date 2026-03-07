@@ -19,18 +19,21 @@ public class ResumeGeneratorService {
     private final AnalysisRecordRepository analysisRecordRepository;
     private final LlmClient llmClient;
     private final ObjectMapper objectMapper;
+    private final ResumeVersionService resumeVersionService;
 
     public ResumeGeneratorService(
             AnalysisRecordRepository analysisRecordRepository,
             LlmClient llmClient,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ResumeVersionService resumeVersionService) {
         this.analysisRecordRepository = analysisRecordRepository;
         this.llmClient = llmClient;
         this.objectMapper = objectMapper;
+        this.resumeVersionService = resumeVersionService;
     }
 
     @Transactional(readOnly = true)
-    public GeneratedResumeResponse generateFromJd(String targetRole, String jdText, String userBackground) {
+    public GeneratedResumeResponse generateFromJd(String targetRole, String jdText, String userBackground, Long userId) {
         String role = clean(targetRole);
         String jd = clean(jdText);
         String background = clean(userBackground);
@@ -68,10 +71,22 @@ public class ResumeGeneratorService {
                 Map.of("role", "user", "content", prompt)
         ), 0.25, 55);
 
+        String markdown = generated != null ? generated : fallbackGenerate(role, jd, background);
+
+        // 自动保存版本
+        if (userId != null) {
+            try {
+                String title = "生成简历 - " + role + " - " + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                resumeVersionService.saveVersion(userId, title, markdown, role, "GENERATED", null);
+            } catch (Exception ex) {
+                // 保存版本失败不影响主流程
+            }
+        }
+
         GeneratedResumeResponse response = new GeneratedResumeResponse();
         response.setMode("GENERATE");
         response.setModelUsed(generated != null);
-        response.setMarkdown(generated != null ? generated : fallbackGenerate(role, jd, background));
+        response.setMarkdown(markdown);
         return response;
     }
 
@@ -88,17 +103,18 @@ public class ResumeGeneratorService {
                 record.getJdText(),
                 record.getTargetRole(),
                 record.getResultJson(),
-                analysisId
+                analysisId,
+                user.getId()
         );
     }
 
     @Transactional(readOnly = true)
-    public GeneratedResumeResponse rewriteByRawText(String resumeText, String jdText, String targetRole) {
+    public GeneratedResumeResponse rewriteByRawText(String resumeText, String jdText, String targetRole, Long userId) {
         String resume = clean(resumeText);
         if (resume.length() < 30) {
             throw new IllegalArgumentException("resume text is too short");
         }
-        return rewriteInternal(resume, jdText, targetRole, "", null);
+        return rewriteInternal(resume, jdText, targetRole, "", null, userId);
     }
 
     private GeneratedResumeResponse rewriteInternal(
@@ -106,7 +122,8 @@ public class ResumeGeneratorService {
             String jdText,
             String targetRole,
             String resultJson,
-            Long analysisId) {
+            Long analysisId,
+            Long userId) {
         String resume = clean(resumeText);
         String jd = clean(jdText);
         String role = clean(targetRole);
@@ -141,11 +158,23 @@ public class ResumeGeneratorService {
                 Map.of("role", "user", "content", prompt)
         ), 0.2, 55);
 
+        String markdown = rewritten != null ? rewritten : fallbackRewrite(resume, jd, role);
+
+        // 自动保存版本
+        if (userId != null) {
+            try {
+                String title = "重写简历 - " + role + " - " + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                resumeVersionService.saveVersion(userId, title, markdown, role, "REWRITTEN", analysisId);
+            } catch (Exception ex) {
+                // 保存版本失败不影响主流程
+            }
+        }
+
         GeneratedResumeResponse response = new GeneratedResumeResponse();
         response.setMode("REWRITE");
         response.setModelUsed(rewritten != null);
         response.setAnalysisId(analysisId);
-        response.setMarkdown(rewritten != null ? rewritten : fallbackRewrite(resume, jd, role));
+        response.setMarkdown(markdown);
         return response;
     }
 

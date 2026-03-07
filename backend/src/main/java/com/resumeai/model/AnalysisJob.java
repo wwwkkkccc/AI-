@@ -79,6 +79,10 @@ public class AnalysisJob {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
+    // 所属批次ID（可选）
+    @Column(name = "batch_id", length = 64)
+    private String batchId;
+
     public String getId() {
         return id;
     }
@@ -189,5 +193,13 @@ public class AnalysisJob {
 
     public void setFinishedAt(Instant finishedAt) {
         this.finishedAt = finishedAt;
+    }
+
+    public String getBatchId() {
+        return batchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.batchId = batchId;
     }
 }

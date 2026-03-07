@@ -2,18 +2,26 @@ package com.resumeai.controller;
 
 import com.resumeai.dto.AdminConfigRequest;
 import com.resumeai.dto.AdminConfigResponse;
+import com.resumeai.dto.AdminStatsResponse;
 import com.resumeai.dto.AdminUserItem;
 import com.resumeai.dto.AdminUserUpdateRequest;
 import com.resumeai.dto.AdminUsersResponse;
 import com.resumeai.dto.AnalysisHistoryResponse;
 import com.resumeai.dto.AnalyzeEnqueueResponse;
 import com.resumeai.dto.AnalyzeJobStatusResponse;
+import com.resumeai.dto.AuditLogResponse;
 import com.resumeai.dto.AuthRequest;
 import com.resumeai.dto.AuthResponse;
+import com.resumeai.dto.BatchStatusResponse;
+import com.resumeai.dto.BatchSubmitResponse;
 import com.resumeai.dto.ChatMessageRequest;
 import com.resumeai.dto.ChatSessionResponse;
+import com.resumeai.dto.CreateCategoryRequest;
 import com.resumeai.dto.GenerateResumeRequest;
 import com.resumeai.dto.GeneratedResumeResponse;
+import com.resumeai.dto.InterviewAnswerRequest;
+import com.resumeai.dto.InterviewKbCategoryQuestionsResponse;
+import com.resumeai.dto.InterviewKbCategoryResponse;
 import com.resumeai.dto.InterviewKbCrawlRequest;
 import com.resumeai.dto.InterviewKbCrawlResponse;
 import com.resumeai.dto.InterviewKbDocItem;
@@ -21,36 +29,64 @@ import com.resumeai.dto.InterviewKbDocQuestionsResponse;
 import com.resumeai.dto.InterviewKbDocsResponse;
 import com.resumeai.dto.InterviewKbLlmImportRequest;
 import com.resumeai.dto.InterviewKbLlmImportResponse;
+import com.resumeai.dto.InterviewMessageResponse;
+import com.resumeai.dto.InterviewSessionsResponse;
 import com.resumeai.dto.JdAnalyzeRequest;
 import com.resumeai.dto.JdRadarResponse;
+import com.resumeai.dto.JobRecommendationResponse;
+import com.resumeai.dto.RedactionRequest;
+import com.resumeai.dto.RedactionResponse;
 import com.resumeai.dto.ResumeAuditRequest;
 import com.resumeai.dto.ResumeAuditResponse;
 import com.resumeai.dto.RewriteResumeRequest;
 import com.resumeai.dto.StartChatRequest;
+import com.resumeai.dto.StartInterviewRequest;
 import com.resumeai.dto.UserInfoResponse;
+import com.resumeai.dto.UserStatsResponse;
+import com.resumeai.model.AuditLog;
 import com.resumeai.model.UserAccount;
 import com.resumeai.service.AnalysisQueueService;
+import com.resumeai.service.AuditLogService;
 import com.resumeai.service.AuthService;
+import com.resumeai.service.BatchAnalysisService;
 import com.resumeai.service.ConfigService;
+import com.resumeai.service.ExportService;
 import com.resumeai.service.ForbiddenException;
 import com.resumeai.service.HistoryService;
+import com.resumeai.service.InterviewKbCategoryService;
 import com.resumeai.service.InterviewKbCrawlerService;
 import com.resumeai.service.InterviewKbDocViewService;
 import com.resumeai.service.InterviewKbLlmImportService;
 import com.resumeai.service.InterviewQuestionKbService;
 import com.resumeai.service.JdAnalyzerService;
+import com.resumeai.service.JobRecommendationService;
+import com.resumeai.service.MockInterviewService;
+import com.resumeai.service.PrivacyRedactionService;
+import com.resumeai.service.RateLimitService;
 import com.resumeai.service.ResumeAuditService;
 import com.resumeai.service.ResumeChatService;
 import com.resumeai.service.ResumeGeneratorService;
+import com.resumeai.service.StatisticsService;
+import com.resumeai.service.StatisticsService;
+import com.resumeai.service.TooManyRequestsException;
 import com.resumeai.service.UnauthorizedException;
 import com.resumeai.service.UserManageService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
@@ -71,6 +107,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api")
@@ -84,6 +121,7 @@ public class ApiController {
     private final HistoryService historyService;
     private final UserManageService userManageService;
     private final InterviewQuestionKbService interviewQuestionKbService;
+    private final InterviewKbCategoryService interviewKbCategoryService;
     private final InterviewKbCrawlerService interviewKbCrawlerService;
     private final InterviewKbDocViewService interviewKbDocViewService;
     private final InterviewKbLlmImportService interviewKbLlmImportService;
@@ -91,6 +129,26 @@ public class ApiController {
     private final ResumeChatService resumeChatService;
     private final JdAnalyzerService jdAnalyzerService;
     private final ResumeAuditService resumeAuditService;
+    private final MockInterviewService mockInterviewService;
+    private final ExportService exportService;
+    private final StatisticsService statisticsService;
+    private final RateLimitService rateLimitService;
+    private final AuditLogService auditLogService;
+    private final BatchAnalysisService batchAnalysisService;
+    private final JobRecommendationService jobRecommendationService;
+    private final PrivacyRedactionService privacyRedactionService;
+
+    @Value("${app.rate-limit.analyze-per-hour:5}")
+    private int analyzePerHour;
+
+    @Value("${app.rate-limit.generate-per-hour:10}")
+    private int generatePerHour;
+
+    @Value("${app.rate-limit.chat-per-hour:30}")
+    private int chatPerHour;
+
+    @Value("${app.rate-limit.interview-per-hour:30}")
+    private int interviewPerHour;
 
     public ApiController(
             AnalysisQueueService analysisQueueService,
@@ -99,19 +157,29 @@ public class ApiController {
             HistoryService historyService,
             UserManageService userManageService,
             InterviewQuestionKbService interviewQuestionKbService,
+            InterviewKbCategoryService interviewKbCategoryService,
             InterviewKbCrawlerService interviewKbCrawlerService,
             InterviewKbDocViewService interviewKbDocViewService,
             InterviewKbLlmImportService interviewKbLlmImportService,
             ResumeGeneratorService resumeGeneratorService,
             ResumeChatService resumeChatService,
             JdAnalyzerService jdAnalyzerService,
-            ResumeAuditService resumeAuditService) {
+            ResumeAuditService resumeAuditService,
+            MockInterviewService mockInterviewService,
+            ExportService exportService,
+            StatisticsService statisticsService,
+            RateLimitService rateLimitService,
+            AuditLogService auditLogService,
+            BatchAnalysisService batchAnalysisService,
+            JobRecommendationService jobRecommendationService,
+            PrivacyRedactionService privacyRedactionService) {
         this.analysisQueueService = analysisQueueService;
         this.configService = configService;
         this.authService = authService;
         this.historyService = historyService;
         this.userManageService = userManageService;
         this.interviewQuestionKbService = interviewQuestionKbService;
+        this.interviewKbCategoryService = interviewKbCategoryService;
         this.interviewKbCrawlerService = interviewKbCrawlerService;
         this.interviewKbDocViewService = interviewKbDocViewService;
         this.interviewKbLlmImportService = interviewKbLlmImportService;
@@ -119,6 +187,14 @@ public class ApiController {
         this.resumeChatService = resumeChatService;
         this.jdAnalyzerService = jdAnalyzerService;
         this.resumeAuditService = resumeAuditService;
+        this.mockInterviewService = mockInterviewService;
+        this.exportService = exportService;
+        this.statisticsService = statisticsService;
+        this.rateLimitService = rateLimitService;
+        this.auditLogService = auditLogService;
+        this.batchAnalysisService = batchAnalysisService;
+        this.jobRecommendationService = jobRecommendationService;
+        this.privacyRedactionService = privacyRedactionService;
     }
 
     @GetMapping("/health")
@@ -172,6 +248,10 @@ public class ApiController {
             @RequestPart(name = "jd_image", required = false) MultipartFile jdImage,
             HttpServletRequest request) {
         UserAccount user = authService.requireUser(request);
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(user.getRole());
+        if (!rateLimitService.checkRateLimit(user.getId(), "analyze", analyzePerHour, 3600, isAdmin)) {
+            throw new TooManyRequestsException("分析请求过于频繁，请稍后再试");
+        }
         return analysisQueueService.enqueue(file, jdText, targetRole, jdImage, user);
     }
 
@@ -184,6 +264,28 @@ public class ApiController {
         return analysisQueueService.getJobStatus(jobId, user, adminMode);
     }
 
+    @PostMapping("/analyze/batch")
+    public BatchSubmitResponse analyzeBatch(
+            @RequestPart("files") MultipartFile[] files,
+            @RequestParam(name = "jdText", required = false) String jdText,
+            @RequestParam(name = "targetRole", required = false) String targetRole,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(user.getRole());
+        if (!rateLimitService.checkRateLimit(user.getId(), "analyze", analyzePerHour * files.length, 3600, isAdmin)) {
+            throw new TooManyRequestsException("批量分析请求过于频繁，请稍后再试");
+        }
+        return batchAnalysisService.submitBatch(files, jdText, targetRole, user);
+    }
+
+    @GetMapping("/analyze/batch/{batchId}")
+    public BatchStatusResponse analyzeBatchStatus(
+            @PathVariable("batchId") String batchId,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return batchAnalysisService.getBatchStatus(batchId, user);
+    }
+
     @GetMapping("/analyses/mine")
     public AnalysisHistoryResponse myAnalyses(
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -193,12 +295,58 @@ public class ApiController {
         return historyService.listMine(user.getId(), page, size);
     }
 
+    @GetMapping("/analyze/jobs/{jobId}/stream")
+    public SseEmitter analyzeJobStream(
+            @PathVariable("jobId") String jobId,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        boolean adminMode = "ADMIN".equalsIgnoreCase(user.getRole());
+        analysisQueueService.getJobStatus(jobId, user, adminMode);
+
+        SseEmitter emitter = new SseEmitter(300000L);
+        analysisQueueService.registerEmitter(jobId, emitter);
+        return emitter;
+    }
+
+    @GetMapping("/analyses/{id}/export")
+    public ResponseEntity<?> exportAnalysis(
+            @PathVariable("id") Long analysisId,
+            @RequestParam(name = "format", defaultValue = "md") String format,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        boolean adminMode = "ADMIN".equalsIgnoreCase(user.getRole());
+
+        if ("pdf".equalsIgnoreCase(format)) {
+            byte[] pdf = exportService.exportPdf(analysisId, user.getId(), adminMode);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.setContentDispositionFormData("attachment", "analysis_" + analysisId + ".pdf");
+            return ResponseEntity.ok().headers(headers).body(pdf);
+        } else {
+            String markdown = exportService.exportMarkdown(analysisId, user.getId(), adminMode);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_MARKDOWN);
+            headers.setContentDispositionFormData("attachment", "analysis_" + analysisId + ".md");
+            return ResponseEntity.ok().headers(headers).body(markdown);
+        }
+    }
+
+    @GetMapping("/stats/mine")
+    public UserStatsResponse myStats(HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return statisticsService.getUserStats(user.getId());
+    }
+
     @PostMapping("/resume/generate")
     public GeneratedResumeResponse generateResume(
             @RequestBody @Valid GenerateResumeRequest req,
             HttpServletRequest request) {
-        authService.requireUser(request);
-        return resumeGeneratorService.generateFromJd(req.getTargetRole(), req.getJdText(), req.getUserBackground());
+        UserAccount user = authService.requireUser(request);
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(user.getRole());
+        if (!rateLimitService.checkRateLimit(user.getId(), "generate", generatePerHour, 3600, isAdmin)) {
+            throw new TooManyRequestsException("简历生成请求过于频繁，请稍后再试");
+        }
+        return resumeGeneratorService.generateFromJd(req.getTargetRole(), req.getJdText(), req.getUserBackground(), user.getId());
     }
 
     @PostMapping("/resume/rewrite")
@@ -210,7 +358,27 @@ public class ApiController {
         if (req.getAnalysisId() != null) {
             return resumeGeneratorService.rewriteByAnalysis(req.getAnalysisId(), user, adminMode);
         }
-        return resumeGeneratorService.rewriteByRawText(req.getResumeText(), req.getJdText(), req.getTargetRole());
+        return resumeGeneratorService.rewriteByRawText(req.getResumeText(), req.getJdText(), req.getTargetRole(), user.getId());
+    }
+
+    @PostMapping(value = "/resume/recommend-jobs", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public List<JobRecommendationResponse> recommendJobs(
+            @RequestBody Map<String, String> req,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        String resumeText = req.get("resumeText");
+        if (resumeText == null || resumeText.trim().isEmpty()) {
+            throw new IllegalArgumentException("resumeText is required");
+        }
+        return jobRecommendationService.recommendJobs(resumeText, user.getId());
+    }
+
+    @PostMapping(value = "/resume/redact", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public RedactionResponse redactResume(
+            @RequestBody RedactionRequest req,
+            HttpServletRequest request) {
+        authService.requireUser(request);
+        return privacyRedactionService.redact(req.getText());
     }
 
     @PostMapping("/chat/start")
@@ -229,7 +397,11 @@ public class ApiController {
             @RequestBody @Valid ChatMessageRequest req,
             HttpServletRequest request) {
         UserAccount user = authService.requireUser(request);
-        boolean adminMode = "ADMIN".equalsIgnoreCase(user.getRole());
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(user.getRole());
+        if (!rateLimitService.checkRateLimit(user.getId(), "chat", chatPerHour, 3600, isAdmin)) {
+            throw new TooManyRequestsException("聊天请求过于频繁，请稍后再试");
+        }
+        boolean adminMode = isAdmin;
         return resumeChatService.sendMessage(sessionId, req.getMessage(), user, adminMode);
     }
 
@@ -274,8 +446,18 @@ public class ApiController {
 
     @PutMapping("/admin/config")
     public AdminConfigResponse updateConfig(@RequestBody @Valid AdminConfigRequest req, HttpServletRequest request) {
+        UserAccount admin = authService.requireAdmin(request);
+        AdminConfigResponse response = configService.updateConfig(req);
+        String ip = authService.getClientIp(request);
+        auditLogService.log(admin, "UPDATE_AI_CONFIG", "AI_CONFIG", "1",
+                String.format("baseUrl=%s, model=%s", req.getBaseUrl(), req.getModel()), ip);
+        return response;
+
+    }
+    @GetMapping("/admin/stats")
+    public AdminStatsResponse adminStats(HttpServletRequest request) {
         authService.requireAdmin(request);
-        return configService.updateConfig(req);
+        return statisticsService.getAdminStats();
     }
 
     @GetMapping("/admin/analyses")
@@ -303,8 +485,12 @@ public class ApiController {
             @PathVariable("id") Long userId,
             @RequestBody @Valid AdminUserUpdateRequest req,
             HttpServletRequest request) {
-        authService.requireAdmin(request);
-        return userManageService.updateUserStatus(userId, req);
+        UserAccount admin = authService.requireAdmin(request);
+        AdminUserItem result = userManageService.updateUserStatus(userId, req);
+        String ip = authService.getClientIp(request);
+        String detail = String.format("blacklisted=%s, vip=%s", req.getBlacklisted(), req.getVip());
+        auditLogService.log(admin, "UPDATE_USER", "USER", userId.toString(), detail, ip);
+        return result;
     }
 
     @PostMapping(value = "/admin/interview-kb/docs", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -329,8 +515,10 @@ public class ApiController {
     public Map<String, Object> deleteInterviewDoc(
             @PathVariable("id") Long docId,
             HttpServletRequest request) {
-        authService.requireAdmin(request);
+        UserAccount admin = authService.requireAdmin(request);
         interviewQuestionKbService.deleteDoc(docId);
+        String ip = authService.getClientIp(request);
+        auditLogService.log(admin, "DELETE_KB_DOC", "KB_DOC", docId.toString(), "删除知识库文档", ip);
         return Map.of("ok", true);
     }
 
@@ -349,7 +537,11 @@ public class ApiController {
             @RequestBody @Valid InterviewKbCrawlRequest req,
             HttpServletRequest request) {
         UserAccount admin = authService.requireAdmin(request);
-        return interviewKbCrawlerService.crawlAndImport(req, admin);
+        InterviewKbCrawlResponse response = interviewKbCrawlerService.crawlAndImport(req, admin);
+        String ip = authService.getClientIp(request);
+        auditLogService.log(admin, "KB_CRAWL", "KB_CRAWL", req.getSeedUrl(),
+                String.format("爬取 %d 个问题", response.getQuestionsImported()), ip);
+        return response;
     }
 
     @PostMapping("/admin/interview-kb/llm-import")
@@ -357,7 +549,157 @@ public class ApiController {
             @RequestBody @Valid InterviewKbLlmImportRequest req,
             HttpServletRequest request) {
         UserAccount admin = authService.requireAdmin(request);
-        return interviewKbLlmImportService.importByLlm(req, admin);
+        InterviewKbLlmImportResponse response = interviewKbLlmImportService.importByLlm(req, admin);
+        String ip = authService.getClientIp(request);
+        auditLogService.log(admin, "KB_LLM_IMPORT", "KB_LLM_IMPORT", req.getTopic(),
+                String.format("LLM 生成 %d 个问题", response.getImportedCount()), ip);
+        return response;
+    }
+
+    @GetMapping("/admin/interview-kb/categories")
+    public java.util.List<InterviewKbCategoryResponse> listCategories(HttpServletRequest request) {
+        authService.requireAdmin(request);
+        return interviewKbCategoryService.listCategories();
+    }
+
+    @PostMapping("/admin/interview-kb/categories")
+    public InterviewKbCategoryResponse createCategory(
+            @RequestBody @Valid CreateCategoryRequest req,
+            HttpServletRequest request) {
+        authService.requireAdmin(request);
+        return interviewKbCategoryService.createCategory(req.getName(), req.getParentId());
+    }
+
+    @DeleteMapping("/admin/interview-kb/categories/{id}")
+    public Map<String, Object> deleteCategory(
+            @PathVariable("id") Long id,
+            HttpServletRequest request) {
+        authService.requireAdmin(request);
+        interviewKbCategoryService.deleteCategory(id);
+        return Map.of("ok", true);
+    }
+
+    @GetMapping("/admin/interview-kb/categories/{id}/questions")
+    public InterviewKbCategoryQuestionsResponse listCategoryQuestions(
+            @PathVariable("id") Long id,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "100") int size,
+            HttpServletRequest request) {
+        authService.requireAdmin(request);
+        return interviewQuestionKbService.listQuestionsByCategory(id, page, size);
+    }
+
+    @PostMapping("/interview/start")
+    public InterviewMessageResponse startInterview(
+            @RequestBody @Valid StartInterviewRequest req,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(user.getRole());
+        if (!rateLimitService.checkRateLimit(user.getId(), "interview", interviewPerHour, 3600, isAdmin)) {
+            throw new TooManyRequestsException("面试请求过于频繁，请稍后再试");
+        }
+        return mockInterviewService.startInterview(req.getTargetRole(), req.getResumeText(), req.getJdText(), user);
+    }
+
+    @PostMapping("/interview/{sessionId}/answer")
+    public InterviewMessageResponse answerQuestion(
+            @PathVariable("sessionId") Long sessionId,
+            @RequestBody @Valid InterviewAnswerRequest req,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return mockInterviewService.answerQuestion(sessionId, req.getAnswer(), user);
+    }
+
+    @PostMapping("/interview/{sessionId}/end")
+    public InterviewMessageResponse endInterview(
+            @PathVariable("sessionId") Long sessionId,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return mockInterviewService.endInterview(sessionId, user);
+    }
+
+    @GetMapping("/interview/{sessionId}/messages")
+    public InterviewMessageResponse getInterviewMessages(
+            @PathVariable("sessionId") Long sessionId,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return mockInterviewService.getMessages(sessionId, user);
+    }
+
+    @GetMapping("/interview/sessions")
+    public InterviewSessionsResponse getInterviewSessions(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            HttpServletRequest request) {
+        UserAccount user = authService.requireUser(request);
+        return mockInterviewService.listSessions(user, page, size);
+    }
+
+    @GetMapping("/admin/audit-logs")
+    public AuditLogResponse getAuditLogs(
+            @RequestParam(name = "action", required = false) String action,
+            @RequestParam(name = "adminUsername", required = false) String adminUsername,
+            @RequestParam(name = "from", required = false) String from,
+            @RequestParam(name = "to", required = false) String to,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            HttpServletRequest request) {
+        authService.requireAdmin(request);
+
+        LocalDate fromDate = null;
+        LocalDate toDate = null;
+        DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE;
+
+        if (from != null && !from.isBlank()) {
+            try {
+                fromDate = LocalDate.parse(from, formatter);
+            } catch (DateTimeParseException e) {
+                throw new IllegalArgumentException("from 参数格式错误，应为 yyyy-MM-dd");
+            }
+        }
+
+        if (to != null && !to.isBlank()) {
+            try {
+                toDate = LocalDate.parse(to, formatter);
+            } catch (DateTimeParseException e) {
+                throw new IllegalArgumentException("to 参数格式错误，应为 yyyy-MM-dd");
+            }
+        }
+
+        Page<AuditLog> pageResult = auditLogService.listLogs(action, adminUsername, fromDate, toDate, page, size);
+
+        AuditLogResponse response = new AuditLogResponse();
+        response.setPage(page);
+        response.setSize(size);
+        response.setTotal(pageResult.getTotalElements());
+        response.setTotalPages(pageResult.getTotalPages());
+
+        DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                .withZone(java.time.ZoneId.of("Asia/Shanghai"));
+
+        response.setItems(pageResult.getContent().stream()
+                .map(log -> {
+                    AuditLogResponse.AuditLogItem item = new AuditLogResponse.AuditLogItem();
+                    item.setId(log.getId());
+                    item.setAdminId(log.getAdminId());
+                    item.setAdminUsername(log.getAdminUsername());
+                    item.setAction(log.getAction());
+                    item.setTargetType(log.getTargetType());
+                    item.setTargetId(log.getTargetId());
+                    item.setDetail(log.getDetail());
+                    item.setIpAddress(log.getIpAddress());
+                    item.setCreatedAt(outputFormatter.format(log.getCreatedAt()));
+                    return item;
+                })
+                .collect(Collectors.toList()));
+
+        return response;
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public Map<String, Object> handleTooManyRequests(TooManyRequestsException ex) {
+        return Map.of("detail", ex.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

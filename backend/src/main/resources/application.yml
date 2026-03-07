@@ -54,3 +54,8 @@ app:
   ocr:
     lang: ${APP_OCR_LANG:chi_sim+eng}
     datapath: ${APP_OCR_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}
+  rate-limit:
+    analyze-per-hour: ${APP_RATE_LIMIT_ANALYZE_PER_HOUR:5}
+    generate-per-hour: ${APP_RATE_LIMIT_GENERATE_PER_HOUR:10}
+    chat-per-hour: ${APP_RATE_LIMIT_CHAT_PER_HOUR:30}
+    interview-per-hour: ${APP_RATE_LIMIT_INTERVIEW_PER_HOUR:30}

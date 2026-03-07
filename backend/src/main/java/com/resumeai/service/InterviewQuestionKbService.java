@@ -1,7 +1,9 @@
 package com.resumeai.service;
 
+import com.resumeai.dto.InterviewKbCategoryQuestionsResponse;
 import com.resumeai.dto.InterviewKbDocItem;
 import com.resumeai.dto.InterviewKbDocsResponse;
+import com.resumeai.dto.InterviewKbQuestionItem;
 import com.resumeai.model.InterviewKbDoc;
 import com.resumeai.model.InterviewKbItem;
 import com.resumeai.model.UserAccount;
@@ -87,16 +89,19 @@ public class InterviewQuestionKbService {
 
     private final InterviewKbDocRepository docRepository;
     private final InterviewKbItemRepository itemRepository;
+    private final InterviewKbCategoryService categoryService;
     private final String ocrLang;
     private final String ocrDatapath;
 
     public InterviewQuestionKbService(
             InterviewKbDocRepository docRepository,
             InterviewKbItemRepository itemRepository,
+            InterviewKbCategoryService categoryService,
             @Value("${app.ocr.lang:chi_sim+eng}") String ocrLang,
             @Value("${app.ocr.datapath:/usr/share/tesseract-ocr/5/tessdata}") String ocrDatapath) {
         this.docRepository = docRepository;
         this.itemRepository = itemRepository;
+        this.categoryService = categoryService;
         this.ocrLang = clean(ocrLang).isEmpty() ? "chi_sim+eng" : clean(ocrLang);
         this.ocrDatapath = clean(ocrDatapath);
     }
@@ -260,6 +265,31 @@ public class InterviewQuestionKbService {
         return new ArrayList<>(unique);
     }
 
+    /** 根据分类ID分页查询面试题 */
+    @Transactional(readOnly = true)
+    public InterviewKbCategoryQuestionsResponse listQuestionsByCategory(Long categoryId, int page, int size) {
+        Pageable pageable = normalizePage(page, size);
+        Page<InterviewKbItem> items = itemRepository.findByCategoryIdOrderByIdAsc(categoryId, pageable);
+
+        InterviewKbCategoryQuestionsResponse response = new InterviewKbCategoryQuestionsResponse();
+        response.setItems(items.getContent().stream().map(this::toQuestionItem).toList());
+        response.setTotal(items.getTotalElements());
+        response.setPage(pageable.getPageNumber());
+        response.setSize(pageable.getPageSize());
+        return response;
+    }
+
+    /** 将题目实体转换为列表项 DTO */
+    private InterviewKbQuestionItem toQuestionItem(InterviewKbItem item) {
+        InterviewKbQuestionItem questionItem = new InterviewKbQuestionItem();
+        questionItem.setId(item.getId());
+        questionItem.setQuestionText(item.getQuestionText());
+        questionItem.setKeywords(item.getKeywords());
+        questionItem.setCategoryId(item.getCategoryId());
+        questionItem.setCreatedAt(item.getCreatedAt());
+        return questionItem;
+    }
+
     /** 保存题库文档及其面试题到数据库 */
     private InterviewKbDocItem saveDoc(List<String> questions, String title, String filename, UserAccount admin) {
         String finalFilename = safeFilename(filename);
@@ -297,6 +327,16 @@ public class InterviewQuestionKbService {
             throw new IllegalArgumentException("no interview questions found in document");
         }
         itemRepository.saveAll(items);
+
+        for (InterviewKbItem item : items) {
+            Long categoryId = categoryService.autoCategorize(item);
+            if (categoryId != null) {
+                item.setCategoryId(categoryId);
+                itemRepository.save(item);
+            }
+        }
+
+        categoryService.updateCategoryQuestionCounts();
 
         doc.setQuestionCount(items.size());
         doc = docRepository.save(doc);

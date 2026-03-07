@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp ai-resume/backend/src/main/java/com/resumeai/service/AuthService.java resume-ai-stack/backend/src/main/java/com/resumeai/service/AuthService.java)",
+      "Bash(cp ai-resume/backend/src/main/java/com/resumeai/service/AnalyzeService.java resume-ai-stack/backend/src/main/java/com/resumeai/service/AnalyzeService.java)",
+      "Bash(ssh -o StrictHostKeyChecking=no -p 22 root@45.207.201.227 \"echo ''=== Memory ==='' && free -h && echo && echo ''=== Docker containers ==='' && docker ps -a --format ''table {{.Names}}\\\\t{{.Status}}\\\\t{{.Image}}\\\\t{{.Ports}}'' && echo && echo ''=== Jenkins related ==='' && docker ps -a --filter name=jenkins --format ''table {{.Names}}\\\\t{{.Status}}\\\\t{{.Image}}'' && echo && echo ''=== /opt/jenkins-stack ==='' && ls -la /opt/jenkins-stack 2>/dev/null || echo ''not found'' && echo && echo ''=== Docker images ==='' && docker images --format ''table {{.Repository}}\\\\t{{.Tag}}\\\\t{{.Size}}''\")",
+      "Bash(python3:*)",
+      "Bash(python scripts/ci/remote_cleanup.py)",
+      "Bash(docker compose exec -T backend bash -c \"cd /app && mvn compile -q\")",
+      "Bash(mvn clean compile -DskipTests)",
+      "Bash(mvn compiler:compile -Dincludes=\"**/ApiController.java\")",
+      "Bash(/e/work/one/PHASE2_IMPLEMENTATION.md:*)",
+      "Read(//e/work/one/**)",
+      "Bash(sed 's|.*/||')",
+      "Bash(__NEW_LINE_c6fcdaaaa0fa1e24__ cat:*)",
+      "Bash(ls -1 /e/work/one/backend/src/main/java/com/resumeai/repository/ResumeVersion*.java /e/work/one/backend/src/main/java/com/resumeai/repository/ResumeTemplate*.java)",
+      "Bash(__NEW_LINE_73efba1bff8997cd__ cat:*)",
+      "Bash(ls -1 /e/work/one/backend/src/main/java/com/resumeai/service/ResumeVersion*.java /e/work/one/backend/src/main/java/com/resumeai/service/ResumeTemplate*.java)",
+      "Bash(__NEW_LINE_e574c96e36ba3f6c__ cat:*)",
+      "Bash(ls -1 /e/work/one/backend/src/main/java/com/resumeai/dto/*Version*.java /e/work/one/backend/src/main/java/com/resumeai/dto/*Template*.java)",
+      "Bash(__NEW_LINE_a540ccc60dd4f47d__ cat:*)",
+      "Bash(__NEW_LINE_063e4cfed10c4dde__ cat:*)",
+      "Bash(ls -1 /e/work/one/PHASE2_*.md)",
+      "Bash(/e/work/one/PHASE2_QUICKSTART.md:*)",
+      "Bash(/e/work/one/PHASE2_FILES.txt:*)",
+      "Bash(awk 'NR==289,NR==297' ApiController.java)",
+      "Bash(awk 'NR==447,NR==455' ApiController.java)",
+      "Bash(mvn compile -q)",
+      "Bash(awk 'NR==455,NR==460' ApiController.java)",
+      "Bash(awk 'NR==450,NR==465' ApiController.java)",
+      "Bash(awk 'NR==450,NR==470' ApiController.java)",
+      "Bash(grep -n \"v-if=\"\"tab === ''mine''\"\"\" \"e:\\\\work\\\\one\\\\frontend\\\\src\\\\App.vue\")",
+      "Bash(grep -n \"tab === ''mine''\" \"e:\\\\work\\\\one\\\\frontend\\\\src\\\\App.vue\")",
+      "Bash(grep -n \"v-else-if=\"\"tab === ''adminKb''\"\"\" \"e:\\\\work\\\\one\\\\frontend\\\\src\\\\App.vue\")",
+      "Bash(npm run build)"
+    ]
+  }
+}

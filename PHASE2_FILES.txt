@@ -1,0 +1,59 @@
+Phase 2 实现文件清单
+====================
+
+新增文件 (18个)
+--------------
+
+Entity (2):
+  backend/src/main/java/com/resumeai/model/ResumeVersion.java
+  backend/src/main/java/com/resumeai/model/ResumeTemplate.java
+
+Repository (2):
+  backend/src/main/java/com/resumeai/repository/ResumeVersionRepository.java
+  backend/src/main/java/com/resumeai/repository/ResumeTemplateRepository.java
+
+Service (2):
+  backend/src/main/java/com/resumeai/service/ResumeVersionService.java
+  backend/src/main/java/com/resumeai/service/ResumeTemplateService.java
+
+DTO (9):
+  backend/src/main/java/com/resumeai/dto/SaveVersionRequest.java
+  backend/src/main/java/com/resumeai/dto/ResumeVersionResponse.java
+  backend/src/main/java/com/resumeai/dto/ResumeVersionItem.java
+  backend/src/main/java/com/resumeai/dto/ResumeVersionDetail.java
+  backend/src/main/java/com/resumeai/dto/VersionCompareResponse.java
+  backend/src/main/java/com/resumeai/dto/CreateTemplateRequest.java
+  backend/src/main/java/com/resumeai/dto/ResumeTemplateResponse.java
+  backend/src/main/java/com/resumeai/dto/ResumeTemplateItem.java
+  backend/src/main/java/com/resumeai/dto/ResumeTemplateDetail.java
+
+Controller (1):
+  backend/src/main/java/com/resumeai/controller/ResumeVersionController.java
+
+文档 (3):
+  PHASE2_API.md
+  PHASE2_IMPLEMENTATION.md
+  PHASE2_QUICKSTART.md
+
+修改文件 (2个)
+--------------
+  backend/src/main/java/com/resumeai/service/ResumeGeneratorService.java
+  backend/src/main/java/com/resumeai/controller/ApiController.java
+
+数据库表 (2个)
+--------------
+  resume_version (自动创建)
+  resume_template (自动创建)
+
+API 端点 (10个)
+---------------
+  POST   /api/resume/versions
+  GET    /api/resume/versions
+  GET    /api/resume/versions/{id}
+  DELETE /api/resume/versions/{id}
+  GET    /api/resume/versions/compare
+  GET    /api/resume/templates
+  GET    /api/resume/templates/{id}
+  POST   /api/admin/resume/templates
+  PUT    /api/admin/resume/templates/{id}
+  DELETE /api/admin/resume/templates/{id}
