@@ -2988,7 +2988,7 @@ async function loadVersions(page = 0) {
   versionsLoading.value = true;
   versionsMessage.value = "";
   try {
-    const data = await apiRequest(`/versions?page=${page}&size=${versionsState.size}`);
+    const data = await apiRequest(`/resume/versions?page=${page}&size=${versionsState.size}`);
     versionsState.items = data.content || [];
     versionsState.page = data.page || 0;
     versionsState.total = data.total || 0;
@@ -3005,7 +3005,7 @@ async function saveVersion(name, content) {
   versionsMessage.value = "";
   try {
     const payload = { name, content };
-    await apiRequest("/versions", {
+    await apiRequest("/resume/versions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -3023,7 +3023,7 @@ async function deleteVersion(versionId) {
   versionsLoading.value = true;
   versionsMessage.value = "";
   try {
-    await apiRequest(`/versions/${versionId}`, { method: "DELETE" });
+    await apiRequest(`/resume/versions/${versionId}`, { method: "DELETE" });
     versionsMessage.value = "版本已删除";
     await loadVersions(versionsState.page);
   } catch (err) {
@@ -3037,7 +3037,7 @@ async function compareVersions(id1, id2) {
   versionsLoading.value = true;
   versionsMessage.value = "";
   try {
-    const data = await apiRequest(`/versions/compare?id1=${id1}&id2=${id2}`);
+    const data = await apiRequest(`/resume/versions/compare?id1=${id1}&id2=${id2}`);
     versionsState.compareResult = data;
     versionsMessage.value = "对比完成";
   } catch (err) {
