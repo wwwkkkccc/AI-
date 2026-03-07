@@ -3355,3 +3355,7 @@ onBeforeUnmount(() => {
   stopPolling();
 });
 </script>
+
+<style lang="scss">
+@import "@/styles/liquid-glass-light-theme.scss";
+</style>
