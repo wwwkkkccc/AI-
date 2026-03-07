@@ -333,7 +333,7 @@ body::after {
 .workspace {
   display: grid;
   grid-template-columns: 268px minmax(0, 1fr);
-  gap: 22px;
+  gap: 12px;
   align-items: start;
 }
 
@@ -586,6 +586,7 @@ body::after {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding: 0;
 }
 
 .main-head {

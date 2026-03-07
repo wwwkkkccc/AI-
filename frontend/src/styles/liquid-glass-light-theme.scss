@@ -292,10 +292,10 @@ body {
 
 .workspace {
   display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 24px;
+  grid-template-columns: 268px minmax(0, 1fr);
+  gap: 12px;
   min-height: 100vh;
-  padding: 0 24px 0 0;
+  padding: 0;
 
   @media (max-width: 968px) {
     grid-template-columns: 1fr;
@@ -495,7 +495,7 @@ body {
 // ==================== 主内容区 ====================
 
 .content-panel {
-  padding: 32px;
+  padding: 0;
 
   @media (max-width: 968px) {
     margin-left: 0;
