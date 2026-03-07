@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.resumeai.dto.AnalyzeResponse;
 import com.resumeai.dto.OptimizedBlock;
-import com.resumeai.model.AiConfig;
 import com.resumeai.model.AnalysisJob;
 import com.resumeai.model.AnalysisRecord;
 import com.resumeai.model.UserAccount;
@@ -15,14 +14,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -40,21 +37,12 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.reactive.function.client.WebClient;
 
 @Service
 public class AnalyzeService {
-    /*
-     * 分析服务总览:
-     * 1. 负责简历/JD文本提取与基础校验
-     * 2. 使用本地规则计算 ATS 分数与关键词覆盖率
-     * 3. 尝试调用大模型生成优化建议，失败则本地兜底
-     * 4. 合并题库面试题并持久化分析记录
-     */
+    /** Core resume analysis service: parsing, ATS scoring, optimization, and persistence. */
     public static final int MAX_FILE_SIZE = 5 * 1024 * 1024;
 
     private static final Pattern EN_TOKEN = Pattern.compile("[a-zA-Z][a-zA-Z0-9_+.#-]{1,30}");
@@ -90,31 +78,24 @@ public class AnalyzeService {
     private static final Map<String, String> ALIAS_TO_CANONICAL = buildAliasMap();
 
     private final AnalysisRecordRepository analysisRecordRepository;
-    private final ConfigService configService;
-    private final InterviewQuestionKbService interviewQuestionKbService;
+    private final LlmClient llmClient;
     private final ObjectMapper objectMapper;
-    private final WebClient.Builder webClientBuilder;
     private final String ocrLang;
     private final String ocrDatapath;
 
     public AnalyzeService(
             AnalysisRecordRepository analysisRecordRepository,
-            ConfigService configService,
-            InterviewQuestionKbService interviewQuestionKbService,
+            LlmClient llmClient,
             ObjectMapper objectMapper,
-            WebClient.Builder webClientBuilder,
             @Value("${app.ocr.lang:chi_sim+eng}") String ocrLang,
             @Value("${app.ocr.datapath:}") String ocrDatapath) {
         this.analysisRecordRepository = analysisRecordRepository;
-        this.configService = configService;
-        this.interviewQuestionKbService = interviewQuestionKbService;
+        this.llmClient = llmClient;
         this.objectMapper = objectMapper;
-        this.webClientBuilder = webClientBuilder;
         this.ocrLang = clean(ocrLang).isEmpty() ? "chi_sim+eng" : clean(ocrLang);
         this.ocrDatapath = clean(ocrDatapath);
     }
 
-    // 提交前校验: 文件必须有效，且 JD 文本或岗位信息至少有一项可用于分析
     public void validateSubmission(MultipartFile file, String jdText, String targetRole) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("file is required");
@@ -129,7 +110,6 @@ public class AnalyzeService {
         }
     }
 
-    // JD 获取优先级: 手工输入文本 > 图片 OCR（用于招聘网站不可复制文本的场景）
     public String resolveJdText(String jdText, MultipartFile jdImage) {
         String cleanJd = clean(jdText);
         if (cleanJd.length() >= 20) {
@@ -162,7 +142,6 @@ public class AnalyzeService {
         }
     }
 
-    // 队列消费入口: 读取落盘文件后，复用统一分析主流程
     public AnalyzeResponse processQueuedJob(AnalysisJob job, UserAccount user) {
         try {
             byte[] data = Files.readAllBytes(Path.of(job.getFilePath()));
@@ -172,7 +151,6 @@ public class AnalyzeService {
         }
     }
 
-    // 统一分析主链路: 解析简历 -> ATS 报告 -> 模型/规则建议 -> 题库问题 -> 保存记录
     private AnalyzeResponse analyzeInternal(byte[] fileData, String filename, String jdText, String targetRole, UserAccount user) {
         String cleanRole = clean(targetRole);
         String cleanJd = clean(jdText);
@@ -191,8 +169,7 @@ public class AnalyzeService {
         if (!modelUsed) {
             optimized = fallbackOptimized(resumeText, cleanJd, cleanRole, ats);
         }
-        List<String> kbQuestions = interviewQuestionKbService.retrieveQuestions(cleanRole, cleanJd, ats.missingKeywords, 5);
-        optimized.setInterviewQuestions(mergeInterviewQuestions(kbQuestions, optimized.getInterviewQuestions(), 10));
+        optimized.setInterviewQuestions(normalizeInterviewQuestions(optimized.getInterviewQuestions(), 10));
 
         AnalyzeResponse response = new AnalyzeResponse();
         response.setScore(ats.score);
@@ -226,7 +203,6 @@ public class AnalyzeService {
         return response;
     }
 
-    // ATS 报告生成: 关键词权重匹配 + 结构完整度 + 动作词强度 + 量化表达强度
     private AtsReport buildAtsReport(String resumeText, String jdText, String targetRole) {
         List<String> resumeTokens = tokenize(resumeText);
         Map<String, Integer> resumeFreq = frequency(resumeTokens);
@@ -379,42 +355,17 @@ public class AnalyzeService {
         return false;
     }
 
-    // 调用大模型生成优化建议; 返回 null 表示调用失败，交给本地兜底策略
+    // Calls shared LLM client and parses strict JSON response into optimization blocks.
     private OptimizedBlock requestLlmOptimized(String resumeText, String jdText, String targetRole, AtsReport ats) {
-        AiConfig cfg = configService.getEntity();
-        String apiKey = clean(cfg.getApiKey());
-        String model = clean(cfg.getModel());
-        if (apiKey.isEmpty() || model.isEmpty()) return null;
-
         String prompt = buildPrompt(resumeText, jdText, targetRole, ats);
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("model", model);
-        payload.put("temperature", 0.2);
-        payload.put("messages", List.of(
+        String content = llmClient.chat(List.of(
                 Map.of("role", "system", "content", "You are an ATS and resume coach. Return strict JSON only."),
                 Map.of("role", "user", "content", prompt)
-        ));
-
-        try {
-            WebClient client = webClientBuilder
-                    .baseUrl(normalizeBaseUrl(cfg.getBaseUrl()))
-                    .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
-                    .build();
-
-            JsonNode resp = client.post()
-                    .uri("/chat/completions")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(payload)
-                    .retrieve()
-                    .bodyToMono(JsonNode.class)
-                    .block(Duration.ofSeconds(45));
-            if (resp == null) return null;
-            String content = resp.path("choices").path(0).path("message").path("content").asText("");
-            if (content.isEmpty()) return null;
-            return parseOptimizedJson(content);
-        } catch (Exception ex) {
+        ), 0.2, 45);
+        if (content == null || content.isEmpty()) {
             return null;
         }
+        return parseOptimizedJson(content);
     }
 
     private String buildPrompt(String resumeText, String jdText, String targetRole, AtsReport ats) {
@@ -458,11 +409,10 @@ public class AnalyzeService {
 
     private OptimizedBlock parseOptimizedJson(String content) {
         try {
-            String trimmed = content.trim();
-            int start = trimmed.indexOf('{');
-            int end = trimmed.lastIndexOf('}');
-            if (start >= 0 && end > start) trimmed = trimmed.substring(start, end + 1);
-            JsonNode root = objectMapper.readTree(trimmed);
+            JsonNode root = llmClient.parseJsonObject(content);
+            if (root == null) {
+                return null;
+            }
 
             OptimizedBlock block = new OptimizedBlock();
             block.setSummary(root.path("summary").asText("Improve role alignment and measurable achievements."));
@@ -487,7 +437,6 @@ public class AnalyzeService {
         return out;
     }
 
-    // 本地兜底建议: 保证模型不可用时依然能输出可读、可执行的优化结果
     private OptimizedBlock fallbackOptimized(String resumeText, String jdText, String targetRole, AtsReport ats) {
         List<String> lines = Arrays.stream(resumeText.split("\\n+"))
                 .map(String::trim)
@@ -523,16 +472,11 @@ public class AnalyzeService {
         return block;
     }
 
-    private List<String> mergeInterviewQuestions(List<String> kbQuestions, List<String> generatedQuestions, int limit) {
+    private List<String> normalizeInterviewQuestions(List<String> generatedQuestions, int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 12));
         List<String> out = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
 
-        if (kbQuestions != null) {
-            for (String q : kbQuestions) {
-                appendQuestion(out, seen, "【题库】" + clean(q), safeLimit);
-            }
-        }
         if (generatedQuestions != null) {
             for (String q : generatedQuestions) {
                 appendQuestion(out, seen, clean(q), safeLimit);
@@ -549,10 +493,7 @@ public class AnalyzeService {
         if (text.isEmpty()) {
             return;
         }
-        String dedupKey = text
-                .replace("【题库】", "")
-                .replaceAll("[\\s\\p{Punct}？?]+", "")
-                .toLowerCase(Locale.ROOT);
+        String dedupKey = text.replaceAll("[^\\p{IsAlphabetic}\\p{IsDigit}]+", "").toLowerCase(Locale.ROOT);
         if (dedupKey.length() < 4 || seen.contains(dedupKey)) {
             return;
         }
@@ -560,7 +501,6 @@ public class AnalyzeService {
         out.add(text);
     }
 
-    // 将结构化结果转为 Markdown，便于历史记录展示与后续导出
     private String toMarkdown(AnalyzeResponse response) {
         StringBuilder sb = new StringBuilder();
         sb.append("# Resume Optimization Report\n\n");
@@ -594,47 +534,46 @@ public class AnalyzeService {
         String summary = optimized == null ? "" : clean(optimized.getSummary());
 
         StringBuilder sb = new StringBuilder();
-        sb.append("# [候选人姓名]\n");
-        sb.append("- 目标岗位：").append(role).append("\n");
-        sb.append("- 联系方式：[待补充]\n\n");
+        sb.append("# [Candidate Name]\n");
+        sb.append("- Target Role: ").append(role).append("\n");
+        sb.append("- Contact: [TO_BE_FILLED]\n\n");
 
-        sb.append("## 职业摘要\n");
+        sb.append("## Professional Summary\n");
         if (summary.isEmpty()) {
-            sb.append("围绕目标岗位输出可量化成果，突出技术深度与业务价值。\n\n");
+            sb.append("Highlight role alignment, technical depth, and measurable delivery outcomes.\n\n");
         } else {
             sb.append(summary).append("\n\n");
         }
 
-        sb.append("## 核心技能\n");
+        sb.append("## Core Skills\n");
         if (skills.isEmpty()) {
-            sb.append("- 根据 JD 要求补齐技能分组（语言/框架/数据库/中间件/工程化）\n");
+            sb.append("- Group skills by language, framework, database, and reliability tooling.\n");
         } else {
             for (String skill : skills) {
                 sb.append("- ").append(clean(skill)).append("\n");
             }
         }
 
-        sb.append("\n## 工作经历（STAR）\n");
+        sb.append("\n## Work Experience (STAR)\n");
         if (experience.isEmpty()) {
-            sb.append("- S：在 [业务场景] 下遇到 [问题]。\n");
-            sb.append("- T：负责 [目标] 与 [交付范围]。\n");
-            sb.append("- A：采用 [技术方案] 完成落地。\n");
-            sb.append("- R：实现 [量化结果]。\n");
+            sb.append("- Situation: [Business context]\n");
+            sb.append("- Task: [Goal and ownership]\n");
+            sb.append("- Action: [Technical approach and execution]\n");
+            sb.append("- Result: [Measurable outcome]\n");
         } else {
             int idx = 1;
             for (String line : experience) {
-                sb.append("### 经历 ").append(idx++).append("\n");
+                sb.append("### Experience ").append(idx++).append("\n");
                 sb.append("- ").append(clean(line)).append("\n");
             }
         }
 
-        sb.append("\n## 原始简历摘录（参考）\n");
+        sb.append("\n## Source Resume Excerpt\n");
         sb.append("```\n").append(cut(resumeText, 1800)).append("\n```\n");
-        sb.append("\n## 教育背景\n- [待补充]\n");
+        sb.append("\n## Education\n- [TO_BE_FILLED]\n");
         return sb.toString();
     }
 
-    // 按文件后缀选择解析器: PDF / DOCX / 图片 OCR / 纯文本
     private String extractResumeText(byte[] data, String filename) {
         String lowerName = clean(filename).toLowerCase(Locale.ROOT);
         try {
@@ -721,20 +660,6 @@ public class AnalyzeService {
                 - Experience with service architecture and database design.
                 - Ability to deliver measurable business outcomes.
                 """.formatted(role);
-    }
-
-    private String normalizeBaseUrl(String baseUrl) {
-        String url = clean(baseUrl);
-        if (url.isEmpty()) {
-            return "https://api.openai.com/v1";
-        }
-        if (url.endsWith("/")) {
-            url = url.substring(0, url.length() - 1);
-        }
-        if (url.matches("^https?://[^/]+$")) {
-            return url + "/v1";
-        }
-        return url;
     }
 
     private String cut(String text, int max) {

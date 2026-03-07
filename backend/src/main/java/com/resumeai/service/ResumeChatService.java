@@ -14,7 +14,6 @@ import com.resumeai.repository.ChatSessionRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,8 +56,7 @@ public class ResumeChatService {
         session.setCreatedAt(Instant.now());
         session = chatSessionRepository.save(session);
 
-        String welcome = buildWelcome(record);
-        saveMessage(session.getId(), ROLE_ASSISTANT, welcome);
+        saveMessage(session.getId(), ROLE_ASSISTANT, buildWelcome(record));
         return toSessionResponse(session);
     }
 
@@ -77,9 +75,10 @@ public class ResumeChatService {
         if (session.getAnalysisId() != null) {
             record = loadRecord(session.getAnalysisId(), user, adminMode);
         }
+
         String answer = callAssistant(sessionId, record);
         if (answer == null) {
-            answer = "我建议你把这条经历按 STAR 结构重写：先交代场景，再写目标、行动、结果，并补上量化指标。";
+            answer = "Rewrite this experience using STAR: context, ownership, action, and measurable result.";
         }
         saveMessage(sessionId, ROLE_ASSISTANT, answer);
         return toSessionResponse(session);
@@ -92,33 +91,19 @@ public class ResumeChatService {
         return toSessionResponse(session);
     }
 
-    @Transactional(readOnly = true)
-    public List<ChatSessionResponse> listMySessions(UserAccount user) {
-        List<ChatSession> sessions = chatSessionRepository.findByUserIdOrderByIdDesc(user.getId());
-        List<ChatSessionResponse> out = new ArrayList<>();
-        for (ChatSession session : sessions) {
-            ChatSessionResponse item = new ChatSessionResponse();
-            item.setSessionId(session.getId());
-            item.setAnalysisId(session.getAnalysisId());
-            item.setCreatedAt(session.getCreatedAt());
-            out.add(item);
-        }
-        return out;
-    }
-
     private String callAssistant(Long sessionId, AnalysisRecord record) {
         List<ChatMessage> history = chatMessageRepository.findBySessionIdOrderByIdAsc(sessionId);
         int start = Math.max(0, history.size() - 12);
 
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", """
-                你是简历优化顾问。
-                规则：
-                1. 结合上下文给出可直接复制到简历的中文内容；
-                2. 优先使用 STAR 结构；
-                3. 每次回答尽量包含可执行改写示例；
-                4. 如果信息不足，先给模板并明确需要补充的事实字段；
-                5. 不要编造候选人没有提供的经历。
+                You are a resume optimization assistant.
+                Rules:
+                1. Provide directly usable resume wording.
+                2. Prefer STAR phrasing.
+                3. Include concrete rewrite examples.
+                4. If information is missing, request exact fields to fill.
+                5. Do not fabricate candidate experience.
                 """));
         if (record != null) {
             messages.add(Map.of("role", "system", "content", buildAnalysisContext(record)));
@@ -134,15 +119,15 @@ public class ResumeChatService {
 
     private String buildWelcome(AnalysisRecord record) {
         if (record == null) {
-            return "优化会话已创建。你可以直接提问，例如：这段经历怎么改成 STAR？";
+            return "Chat session created. You can ask: rewrite this bullet in STAR format.";
         }
         String role = clean(record.getTargetRole());
         return """
-                已载入分析记录（ID=%s，岗位=%s）。
-                你可以直接追问：
-                1. 这条经历具体怎么改成 STAR？
-                2. 缺失关键词怎么补进经历里？
-                3. 帮我重写这一段并给 2 个可选版本。
+                Analysis record loaded (ID=%s, role=%s).
+                You can ask:
+                1. Rewrite this experience with STAR.
+                2. How to cover missing keywords naturally.
+                3. Provide two rewrite variants with different emphasis.
                 """.formatted(record.getId(), role.isEmpty() ? "-" : role);
     }
 
@@ -151,10 +136,7 @@ public class ResumeChatService {
         String missing = "";
         String matched = "";
         try {
-            AnalyzeResponse response = objectMapper.readValue(
-                    clean(record.getResultJson()),
-                    AnalyzeResponse.class
-            );
+            AnalyzeResponse response = objectMapper.readValue(clean(record.getResultJson()), AnalyzeResponse.class);
             if (response.getOptimized() != null) {
                 summary = clean(response.getOptimized().getSummary());
             }
@@ -249,3 +231,4 @@ public class ResumeChatService {
         return text.substring(0, max);
     }
 }
+

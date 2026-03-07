@@ -6,6 +6,8 @@ import com.resumeai.dto.GeneratedResumeResponse;
 import com.resumeai.model.AnalysisRecord;
 import com.resumeai.model.UserAccount;
 import com.resumeai.repository.AnalysisRecordRepository;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -15,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ResumeGeneratorService {
+
+    private static final DateTimeFormatter VERSION_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final AnalysisRecordRepository analysisRecordRepository;
     private final LlmClient llmClient;
@@ -46,18 +50,18 @@ public class ResumeGeneratorService {
 
         String prompt = """
                 You are a senior resume writer.
-                Generate a complete Chinese resume in Markdown for role: %s.
-                Use JD requirements and user background to tailor the content.
-                Keep it realistic. If a fact is missing, mark as [待补充] instead of inventing.
+                Generate a complete resume in Markdown for role: %s.
+                Use JD requirements and user background to tailor content.
+                Keep it realistic. If any fact is unknown, write [TO_BE_FILLED] instead of inventing.
 
                 Output sections in this order:
-                1. 标题与联系方式
-                2. 职业摘要
-                3. 核心技能
-                4. 工作经历（每段 3-4 条 STAR 风格，含量化）
-                5. 项目经历（2-3 个）
-                6. 教育背景
-                7. 证书/附加信息（可选）
+                1. Header and contact
+                2. Professional summary
+                3. Core skills
+                4. Work experience (each role 3-4 STAR bullets with metrics)
+                5. Project experience (2-3 projects)
+                6. Education
+                7. Certifications / Additional information (optional)
 
                 JD:
                 %s
@@ -73,14 +77,8 @@ public class ResumeGeneratorService {
 
         String markdown = generated != null ? generated : fallbackGenerate(role, jd, background);
 
-        // 自动保存版本
         if (userId != null) {
-            try {
-                String title = "生成简历 - " + role + " - " + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-                resumeVersionService.saveVersion(userId, title, markdown, role, "GENERATED", null);
-            } catch (Exception ex) {
-                // 保存版本失败不影响主流程
-            }
+            saveVersionQuietly(userId, "Generated Resume - " + role, markdown, role, "GENERATED", null);
         }
 
         GeneratedResumeResponse response = new GeneratedResumeResponse();
@@ -127,7 +125,6 @@ public class ResumeGeneratorService {
         String resume = clean(resumeText);
         String jd = clean(jdText);
         String role = clean(targetRole);
-
         if (resume.length() < 30) {
             throw new IllegalArgumentException("resume text is too short");
         }
@@ -137,13 +134,13 @@ public class ResumeGeneratorService {
 
         String analysisHints = extractAnalysisHints(resultJson);
         String prompt = """
-                Rewrite the resume into a complete Chinese Markdown resume for role: %s.
-                Keep facts faithful to original resume. Do not fabricate employers, durations, or achievements.
-                Use STAR style bullets for experience.
-                Improve wording and quantification.
-                Add missing skills aligned with JD only if they are supported by resume context.
+                Rewrite the resume into a complete Markdown resume for role: %s.
+                Keep facts faithful to the original resume.
+                Do not fabricate employers, durations, or achievements.
+                Use STAR style bullets and improve quantification.
+                Add skills from JD only when supported by resume context.
 
-                Extra optimization hints:
+                Optimization hints:
                 %s
 
                 Original resume:
@@ -160,14 +157,8 @@ public class ResumeGeneratorService {
 
         String markdown = rewritten != null ? rewritten : fallbackRewrite(resume, jd, role);
 
-        // 自动保存版本
         if (userId != null) {
-            try {
-                String title = "重写简历 - " + role + " - " + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-                resumeVersionService.saveVersion(userId, title, markdown, role, "REWRITTEN", analysisId);
-            } catch (Exception ex) {
-                // 保存版本失败不影响主流程
-            }
+            saveVersionQuietly(userId, "Rewritten Resume - " + role, markdown, role, "REWRITTEN", analysisId);
         }
 
         GeneratedResumeResponse response = new GeneratedResumeResponse();
@@ -178,35 +169,45 @@ public class ResumeGeneratorService {
         return response;
     }
 
+    private void saveVersionQuietly(Long userId, String titlePrefix, String markdown, String role, String sourceType, Long sourceId) {
+        try {
+            String title = titlePrefix + " - " + LocalDateTime.now().format(VERSION_TIME_FORMAT);
+            resumeVersionService.saveVersion(userId, title, markdown, role, sourceType, sourceId);
+        } catch (Exception ignore) {
+            // Version persistence should not block main response.
+        }
+    }
+
     private String fallbackGenerate(String role, String jdText, String background) {
         List<String> topRequirements = extractTopRequirements(jdText, 8);
         return """
-                # [候选人姓名]
-                - 目标岗位：%s
-                - 联系方式：[待补充]
+                # [Candidate Name]
+                - Target Role: %s
+                - Contact: [TO_BE_FILLED]
 
-                ## 职业摘要
-                具备与 %s 岗位相关的交付经验，能够围绕业务目标进行系统设计、开发与优化，持续提升稳定性与效率。
+                ## Professional Summary
+                Experienced in delivering production systems for %s role expectations.
+                Focused on architecture quality, performance, and reliable delivery.
 
-                ## 核心技能
+                ## Core Skills
                 %s
 
-                ## 工作经历
-                ### [公司名称] | [职位] | [时间]
-                - S：面对 [业务场景] 的性能与稳定性问题。
-                - T：负责端到端方案设计与落地。
-                - A：主导 [技术方案]，完成关键链路改造与发布治理。
-                - R：核心指标提升 [待补充%%]，故障率下降 [待补充%%]。
+                ## Work Experience
+                ### [Company Name] | [Role] | [Date Range]
+                - Situation: [Business context]
+                - Task: [Target and ownership]
+                - Action: [Technical approach and execution]
+                - Result: [Measured impact, e.g. latency -30%%, reliability +20%%]
 
-                ## 项目经历
-                ### [项目名称]
-                - 基于 JD 要求构建项目说明，补充架构、挑战、取舍与结果。
+                ## Project Experience
+                ### [Project Name]
+                - Scope, architecture, key trade-offs, and measurable outcomes.
 
-                ## 教育背景
-                - [学校] | [专业] | [学历]
+                ## Education
+                - [School] | [Major] | [Degree]
 
-                ## 补充信息
-                - 用户背景：%s
+                ## Additional Information
+                - Background notes: %s
                 """.formatted(role, role, toBulletList(topRequirements), cut(background, 1200));
     }
 
@@ -215,40 +216,42 @@ public class ResumeGeneratorService {
         List<String> topRequirements = extractTopRequirements(jdText, 8);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("# [候选人姓名]\n");
-        sb.append("- 目标岗位：").append(role).append("\n");
-        sb.append("- 联系方式：[请补充]\n\n");
-        sb.append("## 职业摘要\n");
-        sb.append("围绕 ").append(role).append(" 岗位要求，突出项目交付、性能优化、稳定性治理与跨团队协作能力。\n\n");
+        sb.append("# [Candidate Name]\n");
+        sb.append("- Target Role: ").append(role).append("\n");
+        sb.append("- Contact: [TO_BE_FILLED]\n\n");
 
-        sb.append("## 核心技能\n");
-        for (String req : topRequirements) {
-            sb.append("- ").append(req).append("\n");
-        }
+        sb.append("## Professional Summary\n");
+        sb.append("Aligned to ").append(role).append(" role requirements with clear delivery impact and maintainable engineering practices.\n\n");
+
+        sb.append("## Core Skills\n");
         if (topRequirements.isEmpty()) {
-            sb.append("- [根据 JD 补充核心技能]\n");
-        }
-
-        sb.append("\n## 工作经历（STAR 重写）\n");
-        if (experienceLines.isEmpty()) {
-            sb.append("- S：在 [业务场景] 中遇到 [问题]。\n");
-            sb.append("- T：负责 [目标]。\n");
-            sb.append("- A：采用 [方案] 解决 [难点]。\n");
-            sb.append("- R：达成 [量化结果]。\n");
+            sb.append("- Map JD requirements into proven skills with project evidence.\n");
         } else {
-            int idx = 1;
-            for (String line : experienceLines) {
-                sb.append("### 经历 ").append(idx++).append("\n");
-                sb.append("- S/T：").append(line).append("\n");
-                sb.append("- A：补充技术选型、关键动作和协作方式。\n");
-                sb.append("- R：补充可量化业务结果（效率/成本/稳定性）。\n");
+            for (String req : topRequirements) {
+                sb.append("- ").append(req).append("\n");
             }
         }
 
-        sb.append("\n## 项目经历\n");
-        sb.append("- 结合 JD 重点，补充 2-3 个最相关项目，强调架构与业务价值。\n\n");
-        sb.append("## 教育背景\n");
-        sb.append("- [按原简历补充]\n");
+        sb.append("\n## Work Experience (STAR)\n");
+        if (experienceLines.isEmpty()) {
+            sb.append("- Situation: [Business context]\n");
+            sb.append("- Task: [Goal and ownership]\n");
+            sb.append("- Action: [Solution and execution details]\n");
+            sb.append("- Result: [Measurable outcome]\n");
+        } else {
+            int idx = 1;
+            for (String line : experienceLines) {
+                sb.append("### Experience ").append(idx++).append("\n");
+                sb.append("- Situation/Task: ").append(line).append("\n");
+                sb.append("- Action: Add architecture choices, constraints, and trade-offs.\n");
+                sb.append("- Result: Add measurable business or engineering outcomes.\n");
+            }
+        }
+
+        sb.append("\n## Project Experience\n");
+        sb.append("- Add 2-3 projects with architecture, decisions, and impact metrics.\n\n");
+        sb.append("## Education\n");
+        sb.append("- [Fill from original resume]\n");
         return sb.toString();
     }
 
@@ -261,8 +264,11 @@ public class ResumeGeneratorService {
                 continue;
             }
             String lower = line.toLowerCase(Locale.ROOT);
-            if (lower.contains("project") || lower.contains("项目") || lower.contains("负责")
-                    || lower.contains("优化") || lower.contains("提升")) {
+            if (lower.contains("project")
+                    || lower.contains("deliver")
+                    || lower.contains("optimiz")
+                    || lower.contains("improv")
+                    || lower.contains("responsible")) {
                 out.add(cut(line, 180));
             }
             if (out.size() >= limit) {
@@ -289,16 +295,16 @@ public class ResumeGeneratorService {
 
     private String inferRoleFromJd(String jdText) {
         String lower = clean(jdText).toLowerCase(Locale.ROOT);
-        if (lower.contains("backend") || lower.contains("后端")) {
-            return "后端工程师";
+        if (lower.contains("backend")) {
+            return "Backend Engineer";
         }
-        if (lower.contains("frontend") || lower.contains("前端")) {
-            return "前端工程师";
+        if (lower.contains("frontend")) {
+            return "Frontend Engineer";
         }
-        if (lower.contains("product") || lower.contains("产品")) {
-            return "产品经理";
+        if (lower.contains("product")) {
+            return "Product Manager";
         }
-        return "工程师";
+        return "Software Engineer";
     }
 
     private List<String> extractTopRequirements(String jdText, int limit) {
@@ -306,13 +312,17 @@ public class ResumeGeneratorService {
         List<String> out = new ArrayList<>();
         for (String raw : lines) {
             String line = clean(raw);
-            if (line.length() < 4 || line.length() > 80) {
+            if (line.length() < 4 || line.length() > 100) {
                 continue;
             }
             String lower = line.toLowerCase(Locale.ROOT);
-            if (lower.contains("要求") || lower.contains("熟悉") || lower.contains("must")
-                    || lower.contains("负责") || lower.contains("经验")) {
-                out.add("- " + cut(line, 70));
+            if (lower.contains("require")
+                    || lower.contains("must")
+                    || lower.contains("experience")
+                    || lower.contains("responsib")
+                    || lower.contains("familiar")
+                    || lower.contains("proficient")) {
+                out.add(cut(line, 80));
             }
             if (out.size() >= limit) {
                 break;
@@ -323,9 +333,9 @@ public class ResumeGeneratorService {
 
     private String toBulletList(List<String> lines) {
         if (lines == null || lines.isEmpty()) {
-            return "- [按 JD 补充技能标签]";
+            return "- [Map JD requirements into evidence-backed skills]";
         }
-        return String.join("\n", lines);
+        return lines.stream().map(line -> "- " + line).reduce((a, b) -> a + "\n" + b).orElse("");
     }
 
     private void verifyRecordAccess(AnalysisRecord record, UserAccount user, boolean adminMode) {
@@ -349,3 +359,4 @@ public class ResumeGeneratorService {
         return text.substring(0, max);
     }
 }
+

@@ -10,7 +10,4 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface AnalysisJobRepository extends JpaRepository<AnalysisJob, String> {
     // 根据任务状态查询任务列表
     List<AnalysisJob> findByStatus(String status);
-
-    // 根据批次ID查询任务列表
-    List<AnalysisJob> findByBatchId(String batchId);
 }

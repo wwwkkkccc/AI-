@@ -3,6 +3,7 @@ package com.resumeai.service;
 import com.resumeai.dto.AnalysisHistoryItem;
 import com.resumeai.dto.AnalysisHistoryResponse;
 import com.resumeai.model.AnalysisRecord;
+import com.resumeai.repository.AnalysisHistoryListProjection;
 import com.resumeai.repository.AnalysisRecordRepository;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -25,20 +26,36 @@ public class HistoryService {
     @Transactional(readOnly = true)
     public AnalysisHistoryResponse listMine(Long userId, int page, int size) {
         Pageable pageable = normalizePage(page, size);
-        Page<AnalysisRecord> result = analysisRecordRepository.findByUserIdOrderByIdDesc(userId, pageable);
-        return toResponse(result, pageable, false);
+        Page<AnalysisHistoryListProjection> result = analysisRecordRepository.pageSummaryByUserId(userId, pageable);
+        return toSummaryResponse(result, pageable);
     }
 
     @Transactional(readOnly = true)
     public AnalysisHistoryResponse listAllForAdmin(String usernameLike, int page, int size) {
         Pageable pageable = normalizePage(page, size);
-        Page<AnalysisRecord> result;
-        if (usernameLike == null || usernameLike.isBlank()) {
-            result = analysisRecordRepository.findAllByOrderByIdDesc(pageable);
-        } else {
-            result = analysisRecordRepository.findByUsernameContainingIgnoreCaseOrderByIdDesc(usernameLike.trim(), pageable);
-        }
-        return toResponse(result, pageable, true);
+        String keyword = usernameLike == null ? "" : usernameLike.trim();
+        Page<AnalysisHistoryListProjection> result = analysisRecordRepository.pageSummaryForAdmin(keyword, pageable);
+        return toSummaryResponse(result, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public AnalysisHistoryItem getDetailForAdmin(Long id) {
+        AnalysisRecord record = analysisRecordRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("analysis record not found"));
+        return toItem(record, true);
+    }
+
+    private AnalysisHistoryResponse toSummaryResponse(Page<AnalysisHistoryListProjection> pageResult, Pageable pageable) {
+        List<AnalysisHistoryItem> items = pageResult.getContent().stream()
+                .map(this::toSummaryItem)
+                .toList();
+
+        AnalysisHistoryResponse response = new AnalysisHistoryResponse();
+        response.setItems(items);
+        response.setTotal(pageResult.getTotalElements());
+        response.setPage(pageable.getPageNumber());
+        response.setSize(pageable.getPageSize());
+        return response;
     }
 
     private AnalysisHistoryResponse toResponse(Page<AnalysisRecord> pageResult, Pageable pageable, boolean includeFullText) {
@@ -52,6 +69,23 @@ public class HistoryService {
         response.setPage(pageable.getPageNumber());
         response.setSize(pageable.getPageSize());
         return response;
+    }
+
+    private AnalysisHistoryItem toSummaryItem(AnalysisHistoryListProjection row) {
+        AnalysisHistoryItem item = new AnalysisHistoryItem();
+        item.setId(row.getId());
+        item.setUserId(row.getUserId());
+        item.setUsername(row.getUsername());
+        item.setFilename(row.getFilename());
+        item.setTargetRole(row.getTargetRole());
+        item.setScore(row.getScore());
+        item.setCoverage(row.getCoverage());
+        item.setOptimizedSummary(row.getOptimizedSummary());
+        item.setModelUsed(Boolean.TRUE.equals(row.getModelUsed()));
+        item.setResumePreview(cleanPreview(row.getResumePreview(), 300));
+        item.setJdPreview(cleanPreview(row.getJdPreview(), 240));
+        item.setCreatedAt(row.getCreatedAt());
+        return item;
     }
 
     private AnalysisHistoryItem toItem(AnalysisRecord record, boolean includeFullText) {
@@ -79,11 +113,22 @@ public class HistoryService {
         if (text == null) {
             return "";
         }
-        String clean = text.replace("\r", " ").replace("\n", " ").trim();
+        String clean = cleanPreview(text, max);
         if (clean.length() <= max) {
             return clean;
         }
         return clean.substring(0, max) + "...";
+    }
+
+    private String cleanPreview(String text, int max) {
+        if (text == null) {
+            return "";
+        }
+        String clean = text.replace("\r", " ").replace("\n", " ").trim();
+        if (clean.length() > max) {
+            return clean.substring(0, max);
+        }
+        return clean;
     }
 
     private Pageable normalizePage(int page, int size) {
