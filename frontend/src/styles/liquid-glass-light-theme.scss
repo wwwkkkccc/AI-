@@ -292,11 +292,15 @@ body {
 
 .workspace {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 240px 1fr;
+  gap: 24px;
   min-height: 100vh;
+  padding: 0 24px 0 0;
 
   @media (max-width: 968px) {
     grid-template-columns: 1fr;
+    gap: 0;
+    padding: 0;
   }
 }
 
@@ -492,7 +496,6 @@ body {
 
 .content-panel {
   padding: 32px;
-  margin-left: 280px;
 
   @media (max-width: 968px) {
     margin-left: 0;
