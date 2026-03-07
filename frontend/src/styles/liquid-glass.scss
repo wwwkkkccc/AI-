@@ -1,0 +1,390 @@
+/**
+ * iOS 26 液态玻璃（Liquid Glass）样式系统
+ *
+ * 核心特性：
+ * - 毛玻璃背景模糊效果
+ * - 多层阴影叠加
+ * - 边缘高光与发光
+ * - 动态交互效果
+ * - 响应式适配
+ */
+
+// ==================== 颜色变量 ====================
+$glass-bg-light: rgba(255, 255, 255, 0.1);
+$glass-bg-medium: rgba(255, 255, 255, 0.15);
+$glass-bg-heavy: rgba(255, 255, 255, 0.2);
+
+$glass-border-light: rgba(255, 255, 255, 0.2);
+$glass-border-medium: rgba(255, 255, 255, 0.3);
+$glass-border-heavy: rgba(255, 255, 255, 0.4);
+
+$glass-shadow-light: rgba(0, 0, 0, 0.05);
+$glass-shadow-medium: rgba(0, 0, 0, 0.1);
+$glass-shadow-heavy: rgba(0, 0, 0, 0.15);
+
+$ios-blue: #0A84FF;
+$ios-blue-hover: #0A7AEF;
+$ios-blue-active: #0070DD;
+
+// 深色模式背景渐变
+$dark-bg-start: #000000;
+$dark-bg-end: #1a1a1a;
+
+// ==================== 核心 Mixin ====================
+
+/**
+ * 基础液态玻璃效果
+ * @param {number} $blur - 模糊半径 (默认 20px)
+ * @param {color} $bg - 背景色 (默认 $glass-bg-medium)
+ * @param {color} $border - 边框色 (默认 $glass-border-light)
+ */
+@mixin liquid-glass-base($blur: 20px, $bg: $glass-bg-medium, $border: $glass-border-light) {
+  // 毛玻璃背景模糊
+  backdrop-filter: blur($blur) saturate(180%);
+  -webkit-backdrop-filter: blur($blur) saturate(180%);
+
+  // 半透明背景
+  background: linear-gradient(
+    135deg,
+    $bg 0%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+
+  // 边框高光
+  border: 0.5px solid $border;
+  border-radius: 16px;
+
+  // 多层阴影：外层投影 + 内层高光
+  box-shadow:
+    0 8px 32px $glass-shadow-medium,
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
+
+  // 平滑过渡
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/**
+ * 悬停效果
+ */
+@mixin liquid-glass-hover {
+  &:hover {
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0.12) 100%
+    );
+
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.15),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.25),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
+
+    transform: translateY(-2px);
+  }
+}
+
+/**
+ * 点击/激活效果
+ */
+@mixin liquid-glass-active {
+  &:active {
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.12),
+      inset 0 2px 8px rgba(0, 0, 0, 0.15),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+
+    transform: translateY(0);
+  }
+}
+
+/**
+ * 边缘发光效果
+ */
+@mixin liquid-glass-glow($color: $ios-blue, $intensity: 0.3) {
+  filter: drop-shadow(0 0 8px rgba($color, $intensity));
+}
+
+/**
+ * 完整液态玻璃组件（包含所有交互效果）
+ */
+@mixin liquid-glass-full($blur: 20px, $bg: $glass-bg-medium, $border: $glass-border-light) {
+  @include liquid-glass-base($blur, $bg, $border);
+  @include liquid-glass-hover;
+  @include liquid-glass-active;
+}
+
+// ==================== 按钮样式 ====================
+
+/**
+ * 液态玻璃按钮
+ */
+@mixin liquid-glass-button($variant: 'primary') {
+  @include liquid-glass-full;
+
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  outline: none;
+  position: relative;
+  overflow: hidden;
+
+  @if $variant == 'primary' {
+    background: linear-gradient(
+      135deg,
+      rgba($ios-blue, 0.8) 0%,
+      rgba($ios-blue, 0.6) 100%
+    );
+
+    &:hover {
+      background: linear-gradient(
+        135deg,
+        rgba($ios-blue-hover, 0.9) 0%,
+        rgba($ios-blue-hover, 0.7) 100%
+      );
+    }
+
+    &:active {
+      background: linear-gradient(
+        135deg,
+        rgba($ios-blue-active, 0.85) 0%,
+        rgba($ios-blue-active, 0.65) 100%
+      );
+    }
+  } @else if $variant == 'secondary' {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.15) 0%,
+      rgba(255, 255, 255, 0.08) 100%
+    );
+
+    &:hover {
+      background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.2) 0%,
+        rgba(255, 255, 255, 0.12) 100%
+      );
+    }
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+}
+
+// ==================== 卡片样式 ====================
+
+/**
+ * 液态玻璃卡片
+ */
+@mixin liquid-glass-card($padding: 24px) {
+  @include liquid-glass-full(20px, $glass-bg-medium, $glass-border-light);
+
+  padding: $padding;
+  position: relative;
+  overflow: hidden;
+
+  // 背景噪点纹理（可选）
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.5;
+  }
+}
+
+// ==================== 输入框样式 ====================
+
+/**
+ * 液态玻璃输入框
+ */
+@mixin liquid-glass-input {
+  @include liquid-glass-base(16px, $glass-bg-light, $glass-border-light);
+
+  padding: 12px 16px;
+  font-size: 15px;
+  color: #ffffff;
+  border-radius: 12px;
+  outline: none;
+  width: 100%;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  &:focus {
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+
+    border-color: rgba($ios-blue, 0.6);
+
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.12),
+      inset 0 0 0 1px rgba($ios-blue, 0.3),
+      0 0 0 4px rgba($ios-blue, 0.1);
+  }
+}
+
+// ==================== 导航栏样式 ====================
+
+/**
+ * 液态玻璃导航栏（支持滚动透明度变化）
+ */
+@mixin liquid-glass-navbar($scrolled: false) {
+  @include liquid-glass-base(
+    20px,
+    if($scrolled, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.15)),
+    $glass-border-light
+  );
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 16px 24px;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// ==================== 模态框样式 ====================
+
+/**
+ * 液态玻璃模态框
+ */
+@mixin liquid-glass-modal {
+  @include liquid-glass-full(24px, $glass-bg-heavy, $glass-border-medium);
+
+  padding: 32px;
+  max-width: 600px;
+  margin: 0 auto;
+  position: relative;
+
+  // 模态框背景遮罩
+  &::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: -1;
+  }
+}
+
+// ==================== 工具类 ====================
+
+/**
+ * 组件融合效果（两个玻璃组件靠近时边缘融合）
+ */
+@mixin liquid-glass-merge {
+  &:not(:last-child) {
+    margin-bottom: -1px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+  }
+
+  &:not(:first-child) {
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+  }
+}
+
+/**
+ * 响应式适配
+ */
+@mixin liquid-glass-responsive {
+  @media (max-width: 768px) {
+    border-radius: 12px;
+    padding: 16px;
+
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+  }
+}
+
+// ==================== 动画关键帧 ====================
+
+@keyframes liquid-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes liquid-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes liquid-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+// ==================== 预设类名（可选） ====================
+
+.liquid-glass {
+  @include liquid-glass-full;
+}
+
+.liquid-glass-card {
+  @include liquid-glass-card;
+}
+
+.liquid-glass-button {
+  @include liquid-glass-button('primary');
+}
+
+.liquid-glass-button-secondary {
+  @include liquid-glass-button('secondary');
+}
+
+.liquid-glass-input {
+  @include liquid-glass-input;
+}
+
+.liquid-glass-navbar {
+  @include liquid-glass-navbar(false);
+
+  &.scrolled {
+    @include liquid-glass-navbar(true);
+  }
+}
+
+.liquid-glass-modal {
+  @include liquid-glass-modal;
+}
