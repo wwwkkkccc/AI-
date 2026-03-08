@@ -15,6 +15,9 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Resume generation and rewrite service using JD context and optional analysis artifacts.
+ */
 @Service
 public class ResumeGeneratorService {
 
@@ -36,6 +39,7 @@ public class ResumeGeneratorService {
         this.resumeVersionService = resumeVersionService;
     }
 
+    /** Generates a fresh markdown resume from role/JD/background input. */
     @Transactional(readOnly = true)
     public GeneratedResumeResponse generateFromJd(String targetRole, String jdText, String userBackground, Long userId) {
         String role = clean(targetRole);
@@ -88,6 +92,7 @@ public class ResumeGeneratorService {
         return response;
     }
 
+    /** Rewrites resume based on one stored analysis record and access control context. */
     @Transactional(readOnly = true)
     public GeneratedResumeResponse rewriteByAnalysis(Long analysisId, UserAccount user, boolean adminMode) {
         if (analysisId == null) {
@@ -106,6 +111,7 @@ public class ResumeGeneratorService {
         );
     }
 
+    /** Rewrites resume from raw resume/JD text without requiring an analysis id. */
     @Transactional(readOnly = true)
     public GeneratedResumeResponse rewriteByRawText(String resumeText, String jdText, String targetRole, Long userId) {
         String resume = clean(resumeText);
@@ -359,4 +365,3 @@ public class ResumeGeneratorService {
         return text.substring(0, max);
     }
 }
-

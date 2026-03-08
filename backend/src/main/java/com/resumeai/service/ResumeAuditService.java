@@ -16,6 +16,9 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Resume authenticity/risk audit service using rule checks plus optional LLM findings.
+ */
 @Service
 public class ResumeAuditService {
 
@@ -31,6 +34,7 @@ public class ResumeAuditService {
         this.llmClient = llmClient;
     }
 
+    /** Audits one resume context and returns risk score, level, and findings list. */
     @Transactional(readOnly = true)
     public ResumeAuditResponse audit(ResumeAuditRequest req, UserAccount user, boolean adminMode) {
         ResolvedAuditContext context = resolveContext(req, user, adminMode);

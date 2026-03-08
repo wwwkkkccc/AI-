@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 简历分析历史记录服务。
+ * Query service for analysis history list/detail views.
  */
 @Service
 public class HistoryService {
@@ -23,6 +23,7 @@ public class HistoryService {
         this.analysisRecordRepository = analysisRecordRepository;
     }
 
+    /** Returns paged history summaries for the current user. */
     @Transactional(readOnly = true)
     public AnalysisHistoryResponse listMine(Long userId, int page, int size) {
         Pageable pageable = normalizePage(page, size);
@@ -30,6 +31,7 @@ public class HistoryService {
         return toSummaryResponse(result, pageable);
     }
 
+    /** Returns paged history summaries for admin with optional username keyword filter. */
     @Transactional(readOnly = true)
     public AnalysisHistoryResponse listAllForAdmin(String usernameLike, int page, int size) {
         Pageable pageable = normalizePage(page, size);
@@ -38,6 +40,7 @@ public class HistoryService {
         return toSummaryResponse(result, pageable);
     }
 
+    /** Returns one full analysis record detail for admin usage. */
     @Transactional(readOnly = true)
     public AnalysisHistoryItem getDetailForAdmin(Long id) {
         AnalysisRecord record = analysisRecordRepository.findById(id)

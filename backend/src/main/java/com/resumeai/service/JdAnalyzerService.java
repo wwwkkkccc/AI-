@@ -16,6 +16,9 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Computes JD-vs-resume matching radar dimensions for hiring-fit diagnostics.
+ */
 @Service
 public class JdAnalyzerService {
 
@@ -41,6 +44,7 @@ public class JdAnalyzerService {
         this.analysisRecordRepository = analysisRecordRepository;
     }
 
+    /** Produces multi-dimension match scores based on keyword, years, and domain heuristics. */
     @Transactional(readOnly = true)
     public JdRadarResponse analyze(JdAnalyzeRequest req, UserAccount user, boolean adminMode) {
         ResolvedContext context = resolveContext(req, user, adminMode);

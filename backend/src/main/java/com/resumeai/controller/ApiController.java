@@ -48,6 +48,10 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * Main HTTP entry for user-facing and admin-facing API routes.
+ * This layer only handles request orchestration; business logic stays in services.
+ */
 @RestController
 @RequestMapping("/api")
 public class ApiController {
@@ -95,6 +99,7 @@ public class ApiController {
         this.auditLogService = auditLogService;
     }
 
+    /** Liveness endpoint for deploy probes and quick smoke checks. */
     @GetMapping("/health")
     public Map<String, Object> health() {
         return Map.of(
@@ -125,18 +130,21 @@ public class ApiController {
         return authService.login(req);
     }
 
+    /** Returns the authenticated user's profile payload. */
     @GetMapping("/auth/me")
     public UserInfoResponse me(HttpServletRequest request) {
         UserAccount user = authService.requireUser(request);
         return authService.toUserInfo(user);
     }
 
+    /** Invalidates current auth token on the server side. */
     @PostMapping("/auth/logout")
     public Map<String, Object> logout(HttpServletRequest request) {
         authService.logout(request);
         return Map.of("ok", true);
     }
 
+    /** Submits a resume analysis job into the async queue with rate limiting. */
     @PostMapping(value = "/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AnalyzeEnqueueResponse analyze(
             @RequestPart("file") MultipartFile file,
@@ -152,6 +160,7 @@ public class ApiController {
         return analysisQueueService.enqueue(file, jdText, targetRole, jdImage, user);
     }
 
+    /** Polls async analysis job status and returns result when completed. */
     @GetMapping("/analyze/jobs/{jobId}")
     public AnalyzeJobStatusResponse analyzeJobStatus(
             @PathVariable("jobId") String jobId,
@@ -161,6 +170,7 @@ public class ApiController {
         return analysisQueueService.getJobStatus(jobId, user, adminMode);
     }
 
+    /** Lists current user's analysis history with pagination. */
     @GetMapping("/analyses/mine")
     public AnalysisHistoryResponse myAnalyses(
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -170,6 +180,7 @@ public class ApiController {
         return historyService.listMine(user.getId(), page, size);
     }
 
+    /** Generates a new resume draft from JD + optional background text. */
     @PostMapping("/resume/generate")
     public GeneratedResumeResponse generateResume(
             @RequestBody @Valid GenerateResumeRequest req,
@@ -182,6 +193,7 @@ public class ApiController {
         return resumeGeneratorService.generateFromJd(req.getTargetRole(), req.getJdText(), req.getUserBackground(), user.getId());
     }
 
+    /** Rewrites an existing resume from raw text or an analysis record. */
     @PostMapping("/resume/rewrite")
     public GeneratedResumeResponse rewriteResume(
             @RequestBody RewriteResumeRequest req,
@@ -194,6 +206,7 @@ public class ApiController {
         return resumeGeneratorService.rewriteByRawText(req.getResumeText(), req.getJdText(), req.getTargetRole(), user.getId());
     }
 
+    /** Starts a resume coaching chat session, optionally bound to one analysis result. */
     @PostMapping("/chat/start")
     public ChatSessionResponse startChat(
             @RequestBody(required = false) StartChatRequest req,
@@ -204,6 +217,7 @@ public class ApiController {
         return resumeChatService.startSession(analysisId, user, adminMode);
     }
 
+    /** Sends one message in a chat session and returns full updated message list. */
     @PostMapping("/chat/{sessionId}/message")
     public ChatSessionResponse sendChatMessage(
             @PathVariable("sessionId") Long sessionId,
@@ -217,6 +231,7 @@ public class ApiController {
         return resumeChatService.sendMessage(sessionId, req.getMessage(), user, isAdmin);
     }
 
+    /** Computes JD-vs-resume radar dimensions for quick match diagnostics. */
     @PostMapping("/jd/analyze")
     public JdRadarResponse analyzeJd(
             @RequestBody JdAnalyzeRequest req,
@@ -226,6 +241,7 @@ public class ApiController {
         return jdAnalyzerService.analyze(req, user, adminMode);
     }
 
+    /** Runs resume authenticity/risk audit heuristics plus optional LLM checks. */
     @PostMapping("/resume/audit")
     public ResumeAuditResponse auditResume(
             @RequestBody ResumeAuditRequest req,
@@ -235,6 +251,7 @@ public class ApiController {
         return resumeAuditService.audit(req, user, adminMode);
     }
 
+    /** Admin-only user list API with keyword search and pagination. */
     @GetMapping("/admin/users")
     public AdminUsersResponse adminUsers(
             @RequestParam(name = "keyword", required = false) String keyword,
@@ -245,6 +262,7 @@ public class ApiController {
         return userManageService.listUsers(keyword, page, size);
     }
 
+    /** Admin-only user status update API and operation audit logging. */
     @PutMapping("/admin/users/{id}")
     public AdminUserItem updateAdminUser(
             @PathVariable("id") Long userId,

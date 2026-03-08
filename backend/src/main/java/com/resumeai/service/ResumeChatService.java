@@ -18,6 +18,9 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Context-aware resume coaching chat service backed by persisted sessions and messages.
+ */
 @Service
 public class ResumeChatService {
 
@@ -43,6 +46,7 @@ public class ResumeChatService {
         this.llmClient = llmClient;
     }
 
+    /** Creates a new chat session and stores one assistant welcome message. */
     @Transactional
     public ChatSessionResponse startSession(Long analysisId, UserAccount user, boolean adminMode) {
         AnalysisRecord record = null;
@@ -60,6 +64,7 @@ public class ResumeChatService {
         return toSessionResponse(session);
     }
 
+    /** Appends one user message, calls LLM assistant, and returns updated conversation. */
     @Transactional
     public ChatSessionResponse sendMessage(Long sessionId, String message, UserAccount user, boolean adminMode) {
         ChatSession session = loadSession(sessionId);
@@ -84,6 +89,7 @@ public class ResumeChatService {
         return toSessionResponse(session);
     }
 
+    /** Reads all messages in one chat session after permission checks. */
     @Transactional(readOnly = true)
     public ChatSessionResponse getMessages(Long sessionId, UserAccount user, boolean adminMode) {
         ChatSession session = loadSession(sessionId);
@@ -231,4 +237,3 @@ public class ResumeChatService {
         return text.substring(0, max);
     }
 }
-
