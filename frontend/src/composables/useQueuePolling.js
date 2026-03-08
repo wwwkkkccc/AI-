@@ -7,7 +7,7 @@ export function useQueuePolling({
   toZhMessage
 }) {
   let pollTimer = null;
-  // Adaptive delay reduces request pressure while users wait in queue.
+  // 自适应轮询间隔：排队时逐步增加间隔，减少请求压力。
   let pollDelayMs = 1200;
 
   function stopPolling() {
@@ -37,15 +37,15 @@ export function useQueuePolling({
       queueJob.finishedAt = statusData.finishedAt || "";
 
       if (queueJob.status === "PENDING") {
-        const posText = queueJob.queuePosition ? `, queue position: ${queueJob.queuePosition}` : "";
-        analyzeMessage.value = `Job submitted and queued${posText}`;
+        const posText = queueJob.queuePosition ? `，队列位置：${queueJob.queuePosition}` : "";
+        analyzeMessage.value = `任务已提交并进入队列${posText}`;
         pollDelayMs = Math.min(5000, pollDelayMs + 400);
         scheduleNextPoll(jobId);
         return;
       }
 
       if (queueJob.status === "PROCESSING") {
-        analyzeMessage.value = "Job is processing...";
+        analyzeMessage.value = "任务分析中...";
         pollDelayMs = 1400;
         scheduleNextPoll(jobId);
         return;
@@ -54,18 +54,18 @@ export function useQueuePolling({
       if (queueJob.status === "DONE") {
         stopPolling();
         result.value = statusData.result || null;
-        analyzeMessage.value = `Analysis completed, Record ID: ${statusData.result?.analysisId || "-"}`;
+        analyzeMessage.value = `分析完成，记录 ID：${statusData.result?.analysisId || "-"}`;
         await loadMineAnalyses();
         return;
       }
 
       if (queueJob.status === "FAILED") {
         stopPolling();
-        analyzeMessage.value = `Analysis failed: ${toZhMessage(queueJob.errorMessage || "unknown error")}`;
+        analyzeMessage.value = `分析失败：${toZhMessage(queueJob.errorMessage || "未知错误")}`;
       }
     } catch (err) {
       stopPolling();
-      analyzeMessage.value = toZhMessage(err?.message || "failed to get job status");
+      analyzeMessage.value = toZhMessage(err?.message || "获取任务状态失败");
     }
   }
 

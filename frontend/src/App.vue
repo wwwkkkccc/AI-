@@ -2,31 +2,31 @@
   <div class="app-shell">
     <section v-if="!token" class="auth-layout">
       <div class="auth-card">
-        <p class="kicker">Resume AI Workspace</p>
-        <h1>{{ authMode === "login" ? "Welcome Back" : "Create Account" }}</h1>
-        <p class="subtle">Keep only meaningful capabilities. Focus on one complete resume optimization loop.</p>
+        <p class="kicker">简历 AI 工作台</p>
+        <h1>{{ authMode === "login" ? "欢迎回来" : "创建账号" }}</h1>
+        <p class="subtle">保留关键能力，专注一条完整的简历优化闭环。</p>
 
         <form class="form-grid" @submit.prevent="submitAuth">
           <label class="field">
-            <span>Username</span>
+            <span>用户名</span>
             <input v-model.trim="activeAuthForm.username" type="text" autocomplete="username" required />
           </label>
           <label class="field">
-            <span>Password</span>
+            <span>密码</span>
             <input v-model.trim="activeAuthForm.password" type="password" autocomplete="current-password" required />
           </label>
           <label class="checkbox-row">
             <input v-model="rememberMe" type="checkbox" />
-            <span>Remember me</span>
+            <span>记住我</span>
           </label>
           <button class="btn primary" :disabled="authLoading" type="submit">
-            {{ authLoading ? "Submitting..." : authMode === "login" ? "Login" : "Register" }}
+            {{ authLoading ? "提交中..." : authMode === "login" ? "登录" : "注册" }}
           </button>
         </form>
 
         <p class="message">{{ authMessage }}</p>
         <a href="#" class="switch-link" @click.prevent="toggleAuthMode">
-          {{ authMode === "login" ? "No account? Register" : "Already have account? Login" }}
+          {{ authMode === "login" ? "没有账号？去注册" : "已有账号？去登录" }}
         </a>
       </div>
     </section>
@@ -34,21 +34,21 @@
     <section v-else class="workspace-layout">
       <aside class="sidebar">
         <div>
-          <p class="kicker">Workspace</p>
-          <h2>Resume Analysis</h2>
+          <p class="kicker">工作区</p>
+          <h2>简历分析</h2>
           <p class="subtle">{{ me.username }} · {{ roleText(me.role) }}</p>
-          <p class="subtle">{{ me.vip ? "VIP Priority Queue" : "Standard Queue" }}</p>
+          <p class="subtle">{{ me.vip ? "VIP 优先队列" : "标准队列" }}</p>
         </div>
 
         <nav class="nav-list">
-          <button class="nav-item" :class="{ active: tab === 'analyze' }" @click="openTab('analyze')">Analysis Board</button>
-          <button class="nav-item" :class="{ active: tab === 'mine' }" @click="openTab('mine')">My Records</button>
+          <button class="nav-item" :class="{ active: tab === 'analyze' }" @click="openTab('analyze')">分析面板</button>
+          <button class="nav-item" :class="{ active: tab === 'mine' }" @click="openTab('mine')">我的记录</button>
           <button v-if="isAdmin" class="nav-item" :class="{ active: tab === 'adminUsers' }" @click="openTab('adminUsers')">
-            User Governance
+            用户管理
           </button>
         </nav>
 
-        <button class="btn ghost" @click="logout">Logout</button>
+        <button class="btn ghost" @click="logout">退出登录</button>
       </aside>
 
       <main class="workspace-main">
@@ -56,7 +56,7 @@
           <h1>{{ tabTitle }}</h1>
           <div class="header-tags">
             <span class="tag" v-if="queueJob.jobId">{{ statusText(queueJob.status) }}</span>
-            <span class="tag" v-if="result?.analysisId">Record #{{ result.analysisId }}</span>
+            <span class="tag" v-if="result?.analysisId">记录 #{{ result.analysisId }}</span>
           </div>
         </header>
 
@@ -159,7 +159,7 @@ const tab = ref("analyze");
 const token = ref(localStorage.getItem(tokenKey) || sessionStorage.getItem(tokenKey) || "");
 const me = reactive({ id: null, username: "", role: "", vip: false, blacklisted: false });
 
-// Core analysis workflow state.
+// 核心分析流程状态。
 const analyzeLoading = ref(false);
 const analyzeMessage = ref("");
 const analyzeForm = reactive({ targetRole: "", jdText: "", file: null, jdImage: null });
@@ -210,7 +210,7 @@ const adminUserTotal = ref(0);
 const requestAbort = createRequestAbortManager();
 const { apiRequest } = useApiClient({ apiBase, token });
 const isAdmin = computed(() => String(me.role || "").toUpperCase() === "ADMIN");
-const tabTitle = computed(() => (tab.value === "mine" ? "My Analysis Records" : tab.value === "adminUsers" ? "User Governance" : "Resume Analysis Board"));
+const tabTitle = computed(() => (tab.value === "mine" ? "我的分析记录" : tab.value === "adminUsers" ? "用户管理" : "简历分析面板"));
 const filteredMineItems = computed(() => filterMineItemsByKeyword(mineItems.value, mineKeyword.value));
 
 const { loadMineAnalyses, loadAdminUsers, toggleVip, toggleBlacklist } = useDataPanels({
@@ -290,6 +290,7 @@ const { authLoading, authMessage, authMode, rememberMe, activeAuthForm, toggleAu
 });
 
 async function copyText(text) {
+  // 统一文本复制入口，避免各面板重复处理空值和异常。
   const content = String(text || "").trim();
   if (!content) return;
   try {
@@ -300,6 +301,7 @@ async function copyText(text) {
 }
 
 function downloadText(filename, text) {
+  // 统一文本下载入口，使用 Blob + 临时链接触发浏览器下载。
   const content = String(text || "");
   if (!content) return;
   const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
@@ -333,7 +335,7 @@ async function logout() {
   stopPolling();
   requestAbort.cancelAll();
 
-  // Clear all user-bound runtime data to avoid cross-account residue.
+  // 清空所有用户态运行数据，避免账号切换后残留状态。
   resetAfterLogout({
     tokenKey,
     token,
@@ -416,7 +418,7 @@ onMounted(async () => {
     if (isAdmin.value) await loadAdminUsers();
   } catch (err) {
     await logout();
-    authMessage.value = toZhMessage(err?.message || "login state expired");
+    authMessage.value = toZhMessage(err?.message || "登录状态已失效");
   }
 });
 

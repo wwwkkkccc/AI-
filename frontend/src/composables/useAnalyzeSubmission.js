@@ -28,14 +28,14 @@ export function useAnalyzeSubmission({
 
   async function submitAnalyze() {
     if (!analyzeForm.file) {
-      analyzeMessage.value = "Please select a resume file first";
+      analyzeMessage.value = "请先选择简历文件";
       return;
     }
 
     analyzeLoading.value = true;
     analyzeMessage.value = "";
 
-    // Reset analysis-linked panels before starting a new job.
+    // 提交新任务前，先重置所有依赖当前分析结果的面板状态。
     result.value = null;
     chatState.sessionId = null;
     chatState.messages = [];
@@ -66,10 +66,10 @@ export function useAnalyzeSubmission({
       queueJob.status = data.status || "PENDING";
       queueJob.queuePosition = data.queuePosition ?? null;
       queueJob.vipPriority = !!data.vipPriority;
-      analyzeMessage.value = `${toZhMessage(data.message || "queued")}, Job ID: ${data.jobId}`;
+      analyzeMessage.value = `${toZhMessage(data.message || "queued")}，任务 ID：${data.jobId}`;
       startPolling(data.jobId);
     } catch (err) {
-      analyzeMessage.value = toZhMessage(err?.message || "submit analysis failed");
+      analyzeMessage.value = toZhMessage(err?.message || "提交分析失败");
     } finally {
       analyzeLoading.value = false;
     }

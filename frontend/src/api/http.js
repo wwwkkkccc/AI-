@@ -15,7 +15,7 @@ export async function requestJson(apiBase, path, options = {}, errorMapper = toZ
   const res = await fetch(`${apiBase}${path}`, options);
   const data = await readJsonBody(res);
   if (!res.ok) {
-    const rawMessage = data?.detail || data?.message || `request failed: ${res.status}`;
+    const rawMessage = data?.detail || data?.message || `请求失败：${res.status}`;
     const message = typeof errorMapper === "function" ? errorMapper(rawMessage) : rawMessage;
     throw new Error(message);
   }

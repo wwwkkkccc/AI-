@@ -1,9 +1,9 @@
 <template>
   <section class="panel-card">
-    <h3>My Analysis Records</h3>
+    <h3>我的分析记录</h3>
     <div class="toolbar">
-      <input :value="mineKeyword" type="text" placeholder="Filter by filename / role / summary" @input="onKeywordInput" />
-      <button class="btn ghost" @click="loadMineAnalyses">Refresh</button>
+      <input :value="mineKeyword" type="text" placeholder="按文件名 / 岗位 / 总结筛选" @input="onKeywordInput" />
+      <button class="btn ghost" @click="loadMineAnalyses">刷新</button>
     </div>
     <p class="message">{{ mineMessage }}</p>
 
@@ -12,12 +12,12 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>File</th>
-            <th>Role</th>
-            <th>Score</th>
-            <th>Coverage</th>
-            <th>Created At</th>
-            <th>Summary</th>
+            <th>文件</th>
+            <th>岗位</th>
+            <th>评分</th>
+            <th>匹配度</th>
+            <th>创建时间</th>
+            <th>总结</th>
           </tr>
         </thead>
         <tbody>
@@ -30,23 +30,23 @@
             <td>{{ formatTime(item.createdAt) }}</td>
             <td>{{ item.optimizedSummary || "-" }}</td>
           </tr>
-          <tr v-if="!filteredMineItems.length"><td colspan="7" class="empty">No records</td></tr>
+          <tr v-if="!filteredMineItems.length"><td colspan="7" class="empty">暂无记录</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="pager">
-      <button class="btn ghost" :disabled="minePage === 0" @click="mineGoPage(minePage - 1)">Prev</button>
+      <button class="btn ghost" :disabled="minePage === 0" @click="mineGoPage(minePage - 1)">上一页</button>
       <button v-for="page in minePageRange" :key="`mine-${page}`" class="btn ghost" :class="{ active: page === minePage }" @click="mineGoPage(page)">
         {{ page + 1 }}
       </button>
-      <button class="btn ghost" :disabled="minePage >= mineTotalPages - 1" @click="mineGoPage(minePage + 1)">Next</button>
+      <button class="btn ghost" :disabled="minePage >= mineTotalPages - 1" @click="mineGoPage(minePage + 1)">下一页</button>
       <select :value="mineSize" @change="mineChangeSize($event.target.value)">
         <option :value="10">10</option>
         <option :value="20">20</option>
         <option :value="50">50</option>
       </select>
-      <span>Total {{ mineTotal }}</span>
+      <span>共 {{ mineTotal }} 条</span>
     </div>
   </section>
 </template>
@@ -71,6 +71,7 @@ defineProps({
 const emit = defineEmits(["update:mineKeyword"]);
 
 function onKeywordInput(event) {
+  // 关键字由父组件统一管理，子组件只负责同步输入。
   emit("update:mineKeyword", event?.target?.value ?? "");
 }
 </script>

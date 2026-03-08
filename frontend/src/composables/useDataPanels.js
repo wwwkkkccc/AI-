@@ -31,7 +31,7 @@ export function useDataPanels({
       mineMessage.value = "";
     } catch (err) {
       if (isAbortError(err)) return;
-      mineMessage.value = toZhMessage(err?.message || "Failed to load my records");
+      mineMessage.value = toZhMessage(err?.message || "加载我的记录失败");
     }
   }
 
@@ -47,11 +47,12 @@ export function useDataPanels({
       adminUsersMessage.value = "";
     } catch (err) {
       if (isAbortError(err)) return;
-      adminUsersMessage.value = toZhMessage(err?.message || "Failed to load users");
+      adminUsersMessage.value = toZhMessage(err?.message || "加载用户列表失败");
     }
   }
 
   async function updateUserFlags(userId, payload) {
+    // 操作中锁定当前用户按钮，防止重复提交。
     adminUserLoadingId.value = userId;
     adminUsersMessage.value = "";
     try {
@@ -61,9 +62,9 @@ export function useDataPanels({
         body: JSON.stringify(payload)
       });
       await loadAdminUsers();
-      adminUsersMessage.value = "User status updated";
+      adminUsersMessage.value = "用户状态已更新";
     } catch (err) {
-      adminUsersMessage.value = toZhMessage(err?.message || "Failed to update user status");
+      adminUsersMessage.value = toZhMessage(err?.message || "更新用户状态失败");
     } finally {
       adminUserLoadingId.value = null;
     }
@@ -84,4 +85,3 @@ export function useDataPanels({
     toggleBlacklist
   };
 }
-

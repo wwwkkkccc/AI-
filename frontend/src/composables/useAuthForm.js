@@ -12,6 +12,7 @@ export function useAuthForm({ token, tokenKey, apiRequest, loadMe, onLoggedIn })
   const activeAuthForm = computed(() => (authMode.value === "login" ? loginForm : registerForm));
 
   function persistToken(newToken) {
+    // 根据“记住我”偏好把 token 写入 localStorage 或 sessionStorage。
     const nextToken = String(newToken || "");
     token.value = nextToken;
     localStorage.removeItem(tokenKey);
@@ -44,10 +45,10 @@ export function useAuthForm({ token, tokenKey, apiRequest, loadMe, onLoggedIn })
       });
       persistToken(data.token);
       await loadMe();
-      authMessage.value = "Login successful";
+      authMessage.value = "登录成功";
       if (typeof onLoggedIn === "function") onLoggedIn();
     } catch (err) {
-      authMessage.value = toZhMessage(err?.message || "login failed");
+      authMessage.value = toZhMessage(err?.message || "登录失败");
     } finally {
       authLoading.value = false;
     }
@@ -64,10 +65,10 @@ export function useAuthForm({ token, tokenKey, apiRequest, loadMe, onLoggedIn })
       });
       persistToken(data.token);
       await loadMe();
-      authMessage.value = "Registration successful";
+      authMessage.value = "注册成功";
       if (typeof onLoggedIn === "function") onLoggedIn();
     } catch (err) {
-      authMessage.value = toZhMessage(err?.message || "register failed");
+      authMessage.value = toZhMessage(err?.message || "注册失败");
     } finally {
       authLoading.value = false;
     }

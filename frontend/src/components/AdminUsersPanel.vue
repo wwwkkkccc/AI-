@@ -1,9 +1,9 @@
 <template>
   <section class="panel-card">
-    <h3>User Governance</h3>
+    <h3>用户管理</h3>
     <div class="toolbar">
-      <input :value="adminUserKeyword" type="text" placeholder="Search by username" @input="onKeywordInput" />
-      <button class="btn ghost" @click="loadAdminUsers">Refresh</button>
+      <input :value="adminUserKeyword" type="text" placeholder="按用户名搜索" @input="onKeywordInput" />
+      <button class="btn ghost" @click="loadAdminUsers">刷新</button>
     </div>
     <p class="message">{{ adminUsersMessage }}</p>
 
@@ -12,12 +12,12 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>Username</th>
-            <th>Role</th>
+            <th>用户名</th>
+            <th>角色</th>
             <th>VIP</th>
-            <th>Blacklist</th>
-            <th>Created At</th>
-            <th>Last Login</th>
+            <th>黑名单</th>
+            <th>创建时间</th>
+            <th>最后登录</th>
           </tr>
         </thead>
         <tbody>
@@ -27,24 +27,24 @@
             <td>{{ roleText(user.role) }}</td>
             <td>
               <button class="btn ghost" :disabled="adminUserLoadingId === user.id" @click="toggleVip(user)">
-                {{ user.vip ? "Enabled" : "Disabled" }}
+                {{ user.vip ? "已开启" : "已关闭" }}
               </button>
             </td>
             <td>
               <button class="btn ghost" :disabled="adminUserLoadingId === user.id" @click="toggleBlacklist(user)">
-                {{ user.blacklisted ? "Blacklisted" : "Normal" }}
+                {{ user.blacklisted ? "已拉黑" : "正常" }}
               </button>
             </td>
             <td>{{ formatTime(user.createdAt) }}</td>
             <td>{{ formatTime(user.lastLoginAt) }}</td>
           </tr>
-          <tr v-if="!adminUsers.length"><td colspan="7" class="empty">No data</td></tr>
+          <tr v-if="!adminUsers.length"><td colspan="7" class="empty">暂无数据</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="pager">
-      <button class="btn ghost" :disabled="adminUserPage === 0" @click="adminUserGoPage(adminUserPage - 1)">Prev</button>
+      <button class="btn ghost" :disabled="adminUserPage === 0" @click="adminUserGoPage(adminUserPage - 1)">上一页</button>
       <button
         v-for="page in adminUserPageRange"
         :key="`admin-${page}`"
@@ -55,14 +55,14 @@
         {{ page + 1 }}
       </button>
       <button class="btn ghost" :disabled="adminUserPage >= adminUserTotalPages - 1" @click="adminUserGoPage(adminUserPage + 1)">
-        Next
+        下一页
       </button>
       <select :value="adminUserSize" @change="adminUserChangeSize($event.target.value)">
         <option :value="10">10</option>
         <option :value="20">20</option>
         <option :value="50">50</option>
       </select>
-      <span>Total {{ adminUserTotal }}</span>
+      <span>共 {{ adminUserTotal }} 条</span>
     </div>
   </section>
 </template>
@@ -90,7 +90,7 @@ defineProps({
 const emit = defineEmits(["update:adminUserKeyword"]);
 
 function onKeywordInput(event) {
+  // 关键字由父组件持有，这里仅透传输入值。
   emit("update:adminUserKeyword", event?.target?.value ?? "");
 }
 </script>
-

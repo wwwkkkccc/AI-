@@ -21,7 +21,7 @@ export function useResumeOperations({
 }) {
   async function generateResumeFromJd() {
     if (!resumeGenForm.targetRole || !resumeGenForm.jdText) {
-      resumeGenMessage.value = "Please provide target role and JD text";
+      resumeGenMessage.value = "请填写目标岗位和 JD 文本";
       return;
     }
     resumeGenLoading.value = true;
@@ -40,9 +40,9 @@ export function useResumeOperations({
       generatedResume.markdown = data.markdown || "";
       generatedResume.modelUsed = !!data.modelUsed;
       generatedResume.analysisId = data.analysisId ?? null;
-      resumeGenMessage.value = generatedResume.modelUsed ? "Resume generated (LLM)" : "Resume generated (fallback)";
+      resumeGenMessage.value = generatedResume.modelUsed ? "简历生成成功（LLM）" : "简历生成成功（降级）";
     } catch (err) {
-      resumeGenMessage.value = toZhMessage(err?.message || "Resume generation failed");
+      resumeGenMessage.value = toZhMessage(err?.message || "简历生成失败");
     } finally {
       resumeGenLoading.value = false;
     }
@@ -51,7 +51,7 @@ export function useResumeOperations({
   async function rewriteResumeFromCurrentAnalysis() {
     const analysisId = result.value?.analysisId;
     if (!analysisId) {
-      resumeGenMessage.value = "No analysis record available for rewrite";
+      resumeGenMessage.value = "没有可用于改写的分析记录";
       return;
     }
     resumeGenLoading.value = true;
@@ -66,9 +66,9 @@ export function useResumeOperations({
       generatedResume.markdown = data.markdown || "";
       generatedResume.modelUsed = !!data.modelUsed;
       generatedResume.analysisId = data.analysisId ?? null;
-      resumeGenMessage.value = generatedResume.modelUsed ? "Resume rewritten (LLM)" : "Resume rewritten (fallback)";
+      resumeGenMessage.value = generatedResume.modelUsed ? "简历改写成功（LLM）" : "简历改写成功（降级）";
     } catch (err) {
-      resumeGenMessage.value = toZhMessage(err?.message || "Resume rewrite failed");
+      resumeGenMessage.value = toZhMessage(err?.message || "简历改写失败");
     } finally {
       resumeGenLoading.value = false;
     }
@@ -76,7 +76,7 @@ export function useResumeOperations({
 
   async function copyGeneratedResume() {
     await copyText(generatedResume.markdown);
-    resumeGenMessage.value = "Copied to clipboard";
+    resumeGenMessage.value = "已复制到剪贴板";
   }
 
   function downloadGeneratedResume() {
@@ -86,7 +86,7 @@ export function useResumeOperations({
   async function startResumeChat() {
     const analysisId = result.value?.analysisId;
     if (!analysisId) {
-      chatMessage.value = "Please complete analysis first";
+      chatMessage.value = "请先完成分析";
       return;
     }
     chatLoading.value = true;
@@ -100,9 +100,9 @@ export function useResumeOperations({
       chatState.sessionId = data.sessionId;
       chatState.messages = data.messages || [];
       chatState.input = "";
-      chatMessage.value = `Chat session started: ${data.sessionId}`;
+      chatMessage.value = `会话已开始：${data.sessionId}`;
     } catch (err) {
-      chatMessage.value = toZhMessage(err?.message || "Failed to start chat");
+      chatMessage.value = toZhMessage(err?.message || "开始会话失败");
     } finally {
       chatLoading.value = false;
     }
@@ -110,7 +110,7 @@ export function useResumeOperations({
 
   async function sendChatMessage() {
     if (!chatState.sessionId) {
-      chatMessage.value = "Please start a chat session first";
+      chatMessage.value = "请先开始会话";
       return;
     }
     if (!chatState.input) return;
@@ -127,13 +127,14 @@ export function useResumeOperations({
       chatState.messages = data.messages || [];
       chatState.input = "";
     } catch (err) {
-      chatMessage.value = toZhMessage(err?.message || "Failed to send chat message");
+      chatMessage.value = toZhMessage(err?.message || "发送会话消息失败");
     } finally {
       chatLoading.value = false;
     }
   }
 
   async function quickAsk(text) {
+    // 复用发送逻辑，确保状态和错误处理一致。
     chatState.input = text;
     await sendChatMessage();
   }
@@ -141,7 +142,7 @@ export function useResumeOperations({
   async function runJdRadarFromCurrent() {
     const analysisId = result.value?.analysisId;
     if (!analysisId) {
-      radarMessage.value = "Please complete analysis first";
+      radarMessage.value = "请先完成分析";
       return;
     }
     radarLoading.value = true;
@@ -152,9 +153,9 @@ export function useResumeOperations({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ analysisId })
       });
-      radarMessage.value = "JD radar generated";
+      radarMessage.value = "JD 雷达已生成";
     } catch (err) {
-      radarMessage.value = toZhMessage(err?.message || "JD radar failed");
+      radarMessage.value = toZhMessage(err?.message || "JD 雷达分析失败");
     } finally {
       radarLoading.value = false;
     }
@@ -163,7 +164,7 @@ export function useResumeOperations({
   async function runAuditFromCurrent() {
     const analysisId = result.value?.analysisId;
     if (!analysisId) {
-      auditMessage.value = "Please complete analysis first";
+      auditMessage.value = "请先完成分析";
       return;
     }
     auditLoading.value = true;
@@ -174,9 +175,9 @@ export function useResumeOperations({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ analysisId, targetRole: analyzeForm.targetRole || "" })
       });
-      auditMessage.value = "Authenticity audit completed";
+      auditMessage.value = "真实性审计已完成";
     } catch (err) {
-      auditMessage.value = toZhMessage(err?.message || "Authenticity audit failed");
+      auditMessage.value = toZhMessage(err?.message || "真实性审计失败");
     } finally {
       auditLoading.value = false;
     }
@@ -194,4 +195,3 @@ export function useResumeOperations({
     runAuditFromCurrent
   };
 }
-
